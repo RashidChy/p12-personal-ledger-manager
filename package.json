@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false || tsc -p tsconfig.json --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "deploy:pages": "bash scripts/deploy-gh-pages.sh"
   },
   "dependencies": {
     "react": "^18.3.1",

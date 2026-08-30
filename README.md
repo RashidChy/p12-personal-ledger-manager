@@ -321,13 +321,24 @@ retry and a manual-entry fallback.
 - **Repository:** https://github.com/RashidChy/p12-personal-ledger-manager
 - **Host:** GitHub Pages (static, public, no login or setup required).
 
-To deploy the same build anywhere else:
+Redeploy after a change:
+
+```bash
+npm run deploy:pages     # builds, then force-pushes dist/ to the gh-pages branch
+```
+
+To deploy the same build anywhere else (Netlify, Vercel, Cloudflare Pages, any static host):
 
 ```bash
 npm ci
 npm run build
-# then publish the contents of dist/ to any static host
+# then publish the contents of dist/
 ```
+
+The `dist/` output is ~15 MB, almost entirely the Tesseract WASM core and the English
+OCR model. That is the price of keeping OCR on-device with no third-party CDN request;
+the initial page load itself is ~94 KB gzipped, and the OCR assets are fetched only when
+a receipt is actually scanned.
 
 ## Licensing
 
