@@ -1,8 +1,12 @@
 import type { IsoDate, MonthKey } from './dates'
 import type { Paisa } from './money'
 
-/** Categories seen in the official P12 fixture, plus "Other" for user entries. */
-export const CATEGORIES = [
+/**
+ * Categories the app ships with: the ones seen in the official P12 fixture,
+ * plus "Other". They only seed a new ledger - from then on the list lives in
+ * `LedgerState.categories` and the user can add, rename and delete entries.
+ */
+export const DEFAULT_CATEGORIES = [
   'Groceries',
   'Rent',
   'Utilities',
@@ -16,7 +20,21 @@ export const CATEGORIES = [
   'Other',
 ] as const
 
-export type Category = (typeof CATEGORIES)[number]
+/** @deprecated Kept as the previous name for {@link DEFAULT_CATEGORIES}. */
+export const CATEGORIES = DEFAULT_CATEGORIES
+
+/**
+ * A category is any user-chosen label, not a fixed union: the list is data the
+ * user owns. See `domain/categories.ts` for the naming rules that constrain it.
+ */
+export type Category = string
+
+/**
+ * The bucket unrecognised or orphaned records fall into. It cannot be deleted
+ * or renamed, because import and validation both need somewhere to put a
+ * category they do not recognise.
+ */
+export const FALLBACK_CATEGORY = 'Other'
 
 export type ExpenseSource = 'fixture' | 'manual' | 'receipt'
 
@@ -40,7 +58,7 @@ export interface Pocket {
   monthlyContributionPaisa: Paisa
 }
 
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export interface LedgerState {
   schemaVersion: number
@@ -50,6 +68,8 @@ export interface LedgerState {
   salaryByMonth: Record<MonthKey, Paisa>
   expenses: Expense[]
   pockets: Pocket[]
+  /** The user's expense categories, in display order. Always includes "Other". */
+  categories: Category[]
   /** Illustrative annual DPS rate, percent (e.g. 8 for 8.00%). */
   dpsAnnualRatePercent: number
   /** "Forecast as of" date. Seeded from the fixture's `today`. */
@@ -59,6 +79,10 @@ export interface LedgerState {
   updatedAt: string
 }
 
-export function isCategory(value: unknown): value is Category {
-  return typeof value === 'string' && (CATEGORIES as readonly string[]).includes(value)
+/** True when `value` is one of the categories the app ships with. */
+export function isDefaultCategory(value: unknown): value is Category {
+  return typeof value === 'string' && (DEFAULT_CATEGORIES as readonly string[]).includes(value)
 }
+
+/** @deprecated Kept as the previous name for {@link isDefaultCategory}. */
+export const isCategory = isDefaultCategory

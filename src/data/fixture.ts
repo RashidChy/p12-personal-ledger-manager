@@ -22,7 +22,8 @@
 import rawFixture from './P12.fixture.json'
 import { isIsoDate, type IsoDate } from '../domain/dates'
 import { parseTakaToPaisa } from '../domain/money'
-import { SCHEMA_VERSION, isCategory, type Expense, type LedgerState, type Pocket } from '../domain/types'
+import { canonicalCategories, defaultCategories, normalizeCategoryName } from '../domain/categories'
+import { SCHEMA_VERSION, isDefaultCategory, type Expense, type LedgerState, type Pocket } from '../domain/types'
 
 export interface FixtureCase {
   case_id: string
@@ -72,7 +73,9 @@ export function validateFixture(file: FixtureFile = fixture): FixtureValidation 
       if (!isIsoDate(e.date)) problems.push(`${c.case_id}/${e.id}: invalid date ${e.date}`)
       if (!/^\d+\.\d{2}$/.test(e.amount_bdt)) problems.push(`${c.case_id}/${e.id}: unexpected amount format ${e.amount_bdt}`)
       if (e.date > c.today) problems.push(`${c.case_id}/${e.id}: dated after "today"`)
-      if (!isCategory(e.category)) notes.push(`${c.case_id}/${e.id}: category "${e.category}" is not in the built-in list; mapped to Other.`)
+      if (!isDefaultCategory(e.category)) {
+        notes.push(`${c.case_id}/${e.id}: category "${e.category}" is not in the built-in list; it is added to the category list on import.`)
+      }
     }
     for (const p of c.pockets ?? []) {
       if (!/^\d+\.\d{2}$/.test(p.target_bdt)) problems.push(`${c.case_id}/${p.id}: unexpected target format ${p.target_bdt}`)
@@ -100,11 +103,15 @@ export function ledgerStateFromCase(fixtureCase: FixtureCase): LedgerState {
   const expenses: Expense[] = fixtureCase.expenses.map((e) => ({
     id: `fx-${fixtureCase.case_id}-${e.id}`,
     date: e.date as IsoDate,
-    category: isCategory(e.category) ? e.category : 'Other',
+    category: normalizeCategoryName(e.category),
     shop: e.shop,
     amountPaisa: parseTakaToPaisa(e.amount_bdt),
     source: 'fixture' as const,
   }))
+
+  // A case may use a label the app does not ship with; keep it as a category
+  // rather than flattening the record into "Other".
+  const categories = canonicalCategories([...defaultCategories(), ...expenses.map((e) => e.category)])
 
   const pockets: Pocket[] = fixtureCase.pockets.map((p) => ({
     id: `fx-${fixtureCase.case_id}-${p.id}`,
@@ -122,6 +129,7 @@ export function ledgerStateFromCase(fixtureCase: FixtureCase): LedgerState {
     salaryByMonth: {},
     expenses,
     pockets,
+    categories,
     dpsAnnualRatePercent: Number(fixtureCase.dps_annual_rate_percent),
     referenceDate: fixtureCase.today as IsoDate,
     fixtureCaseId: fixtureCase.case_id,

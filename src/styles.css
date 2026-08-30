@@ -223,6 +223,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* ---------- forms ---------- */
 
 .field { display: grid; gap: 5px; min-width: 0; }
+/* An input with a button on the same line: both are 42px tall, so they align
+   on their own once the hint and label are lifted out of the row. */
+.field-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.field-row > input, .field-row > select { flex: 1 1 160px; width: auto; min-width: 0; }
+.field-row > button { flex: none; white-space: nowrap; }
 .field > label, .label { font-size: 0.79rem; font-weight: 620; color: var(--text-muted); }
 .hint { font-size: 0.76rem; color: var(--text-dim); }
 .error-text { font-size: 0.79rem; color: var(--critical); font-weight: 550; }

@@ -30,7 +30,7 @@ Six sections:
 | Section | What it does |
 | --- | --- |
 | **Overview** | Salary, total spent, remaining/overspend, % of salary spent, category breakdown, largest expenses, previous-month comparison, forecast summary, insights, pockets |
-| **Expenses** | Set the standing salary or a per-month override; add, edit and delete expenses (with confirmation); search and filter by category and period |
+| **Expenses** | Set the standing salary or a per-month override; add, edit and delete expenses (with confirmation); search and filter by category and period; add, rename and delete expense categories |
 | **Receipt scanner** | Drop or choose a receipt photo, validate it, preview it, run OCR on this device, review extracted merchant/date/amount with confidence, correct every field, save only on confirmation |
 | **Forecast & insights** | Spending so far, average daily spend, remaining days, expected additional and month-end spending, expected money left or shortfall, forecast date, assumptions, and every generated insight |
 | **Savings pockets** | Create/edit/delete pockets; progress, remaining target, forecast disposable amount, effective affordable contribution, months to completion, completion month, and a full DPS schedule |
@@ -174,7 +174,7 @@ Fixture facts (schema version 2.1, validated by `fixture.test.ts` over all 25 pu
 - Each case has `case_id`, `today`, `months {last, this}`, `salary_bdt`, `expenses[]`, `pockets[]`, `dps_annual_rate_percent`, `dps_rule`.
 - Expenses: `{ id, date, category, shop, amount_bdt }`; 41–61 per case, spread over exactly the two documented months.
 - Pockets: `{ id, name, item, target_bdt, monthly_contribution_bdt }`; 3 per case.
-- Amounts are fixed 2-decimal strings; categories are Groceries, Rent, Utilities, Education, Food, Transport, Health, Mobile, Entertainment, Clothing.
+- Amounts are fixed 2-decimal strings; categories are Groceries, Rent, Utilities, Education, Food, Transport, Health, Mobile, Entertainment, Clothing. These seed the app's category list, which the user can then edit.
 - The default demo case is **PUB-01** (salary ৳50,000, `today` = 2026-04-17, DPS 8.00%); any of the 25 cases can be loaded from the “Reset to sample data” dialog.
 
 **Documented assumptions**
@@ -191,7 +191,8 @@ Fixture facts (schema version 2.1, validated by `fixture.test.ts` over all 25 pu
 Expense  { id, date: "YYYY-MM-DD", category, shop, amountPaisa, source: 'fixture'|'manual'|'receipt', note? }
 Pocket   { id, name, item, targetPaisa, savedPaisa, monthlyContributionPaisa }
 Ledger   { schemaVersion, salaryPaisa | null, salaryByMonth: { "YYYY-MM": paisa },
-           expenses[], pockets[], dpsAnnualRatePercent, referenceDate, fixtureCaseId, updatedAt }
+           expenses[], pockets[], categories[], dpsAnnualRatePercent, referenceDate,
+           fixtureCaseId, updatedAt }
 ```
 
 Money is an **integer number of paisa** everywhere in storage and in the ledger maths.

@@ -3,7 +3,7 @@
 import { useId, useState, type FormEvent } from 'react'
 import { isIsoDate, type IsoDate } from '../domain/dates'
 import { parseTakaToPaisa } from '../domain/money'
-import { CATEGORIES, type Category, type Expense } from '../domain/types'
+import type { Category, Expense } from '../domain/types'
 
 export interface ExpenseDraft {
   date: string
@@ -52,18 +52,24 @@ export function draftToExpense(draft: ExpenseDraft, id: string, source: Expense[
 export function ExpenseFields({
   draft,
   errors,
+  categories,
   onChange,
   idPrefix,
   children,
 }: {
   draft: ExpenseDraft
   errors: DraftErrors
+  /** The user's category list; managed on the Expenses tab. */
+  categories: readonly Category[]
   onChange: (next: ExpenseDraft) => void
   idPrefix?: string
   children?: React.ReactNode
 }) {
   const generated = useId()
   const prefix = idPrefix ?? generated
+  // A draft can still name a category the list no longer has (an old form left
+  // open while it was deleted); show it rather than silently re-filing it.
+  const options = categories.includes(draft.category) ? categories : [draft.category, ...categories]
   return (
     <div className="form-grid">
       <div className="field">
@@ -125,9 +131,9 @@ export function ExpenseFields({
         <select
           id={`${prefix}-category`}
           value={draft.category}
-          onChange={(e) => onChange({ ...draft, category: e.target.value as Category })}
+          onChange={(e) => onChange({ ...draft, category: e.target.value })}
         >
-          {CATEGORIES.map((c) => (
+          {options.map((c) => (
             <option key={c} value={c}>
               {c}
             </option>
@@ -142,11 +148,13 @@ export function ExpenseFields({
 export function ExpenseForm({
   initial,
   submitLabel,
+  categories,
   onSubmit,
   onCancel,
 }: {
   initial: ExpenseDraft
   submitLabel: string
+  categories: readonly Category[]
   onSubmit: (draft: ExpenseDraft) => void
   onCancel: () => void
 }) {
@@ -167,6 +175,7 @@ export function ExpenseForm({
       <ExpenseFields
         draft={draft}
         errors={submitted ? errors : {}}
+        categories={categories}
         onChange={(next) => {
           setDraft(next)
           if (submitted) setErrors(validateDraft(next))

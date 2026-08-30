@@ -7,9 +7,18 @@
  *    never silently coerced into a zero;
  *  - a corrupt blob never takes the rest of the user's data down with it.
  */
+import { canonicalCategories, defaultCategories, findCategory, normalizeCategoryName } from '../domain/categories'
 import { isIsoDate, isMonthKey, todayIso } from '../domain/dates'
 import { isValidPaisa } from '../domain/money'
-import { SCHEMA_VERSION, isCategory, type Expense, type LedgerState, type Pocket } from '../domain/types'
+import {
+  DEFAULT_CATEGORIES,
+  FALLBACK_CATEGORY,
+  SCHEMA_VERSION,
+  type Category,
+  type Expense,
+  type LedgerState,
+  type Pocket,
+} from '../domain/types'
 
 export interface ValidationResult {
   state: LedgerState | null
@@ -27,7 +36,42 @@ function asPaisa(value: unknown): number | null {
   return null
 }
 
-function validateExpense(raw: unknown, index: number, issues: string[]): Expense | null {
+/**
+ * Repairs the stored category list. A missing list is normal for data written
+ * before categories were editable, so it falls back to the defaults quietly;
+ * entries that cannot be used are reported individually.
+ */
+function validateCategories(raw: unknown, issues: string[]): Category[] {
+  if (!Array.isArray(raw)) return defaultCategories()
+
+  const usable: string[] = []
+  for (const entry of raw) {
+    if (typeof entry !== 'string' || !normalizeCategoryName(entry)) {
+      issues.push(`A stored category (${JSON.stringify(entry)}) was not a usable name and was dropped.`)
+      continue
+    }
+    usable.push(normalizeCategoryName(entry))
+  }
+  if (usable.length === 0) {
+    issues.push('The stored category list was empty; the built-in categories are used instead.')
+    return defaultCategories()
+  }
+
+  const categories = canonicalCategories(usable)
+  const kept = new Set(categories.map((c) => c.toLowerCase()))
+  const lost = [...new Set(usable.filter((name) => !kept.has(name.toLowerCase())))]
+  for (const name of lost) {
+    issues.push(`The stored category "${name}" was too long to keep and was dropped.`)
+  }
+  return categories
+}
+
+function validateExpense(
+  raw: unknown,
+  index: number,
+  categories: readonly Category[],
+  issues: string[],
+): Expense | null {
   if (typeof raw !== 'object' || raw === null) {
     issues.push(`Expense #${index + 1} was not an object and was dropped.`)
     return null
@@ -48,9 +92,12 @@ function validateExpense(raw: unknown, index: number, issues: string[]): Expense
     issues.push(`Expense ${id} had an invalid amount (${JSON.stringify(r.amountPaisa)}) and was dropped.`)
     return null
   }
-  const category = isCategory(r.category) ? r.category : 'Other'
-  if (!isCategory(r.category)) {
-    issues.push(`Expense ${id} had an unknown category (${JSON.stringify(r.category)}); it was moved to "Other".`)
+  const known = typeof r.category === 'string' ? findCategory(categories, r.category) : null
+  const category = known ?? FALLBACK_CATEGORY
+  if (known === null) {
+    issues.push(
+      `Expense ${id} had an unknown category (${JSON.stringify(r.category)}); it was moved to "${FALLBACK_CATEGORY}".`,
+    )
   }
   const source = r.source === 'fixture' || r.source === 'manual' || r.source === 'receipt' ? r.source : 'manual'
   const expense: Expense = {
@@ -111,6 +158,13 @@ export function migrate(raw: Record<string, unknown>, issues: string[]): Record<
     version = 2
   }
 
+  if (version < 3) {
+    // v2 had a fixed, built-in category list; v3 stores an editable one.
+    if (!Array.isArray(data.categories)) data.categories = [...DEFAULT_CATEGORIES]
+    issues.push('Stored data was upgraded from schema v2 to v3 (expense categories are now an editable list).')
+    version = 3
+  }
+
   if (version > SCHEMA_VERSION) {
     issues.push(
       `Stored data was written by a newer version of this app (schema v${version}); it was loaded on a best-effort basis.`,
@@ -130,10 +184,12 @@ export function validateLedgerState(input: unknown): ValidationResult {
   const originalVersion = typeof original.schemaVersion === 'number' ? original.schemaVersion : 1
   const raw = migrate(original, issues)
 
+  const categories = validateCategories(raw.categories, issues)
+
   const expensesRaw = Array.isArray(raw.expenses) ? raw.expenses : []
   if (!Array.isArray(raw.expenses)) issues.push('No expense list was found in stored data; an empty list was used.')
   const expenses = expensesRaw
-    .map((e, i) => validateExpense(e, i, issues))
+    .map((e, i) => validateExpense(e, i, categories, issues))
     .filter((e): e is Expense => e !== null)
 
   const pocketsRaw = Array.isArray(raw.pockets) ? raw.pockets : []
@@ -174,6 +230,7 @@ export function validateLedgerState(input: unknown): ValidationResult {
     salaryByMonth,
     expenses,
     pockets,
+    categories,
     dpsAnnualRatePercent,
     referenceDate,
     fixtureCaseId: typeof raw.fixtureCaseId === 'string' ? raw.fixtureCaseId : null,

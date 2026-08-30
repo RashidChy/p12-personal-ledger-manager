@@ -1,11 +1,13 @@
 /** Expenses: salary control, search, filters, add / edit / delete. */
 import { useMemo, useState } from 'react'
+import { resolveCategory } from '../domain/categories'
 import { formatIsoDate, monthLabel, monthOf, type MonthKey } from '../domain/dates'
 import { formatTaka } from '../domain/format'
 import { parseTakaToPaisa } from '../domain/money'
-import { CATEGORIES, type Category, type Expense, type LedgerState } from '../domain/types'
+import type { Category, Expense, LedgerState } from '../domain/types'
 import type { LedgerAction } from '../store/useLedger'
 import { newId } from '../store/useLedger'
+import { Categories } from './Categories'
 import { Badge, ConfirmDialog, EmptyState, Modal, Notice } from './common'
 import { ExpenseForm, type ExpenseDraft } from './ExpenseForm'
 
@@ -26,11 +28,15 @@ export function Expenses({
   const [deleting, setDeleting] = useState<Expense | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
 
+  // A filter pinned to a category the user has since deleted would hide
+  // everything with no explanation, so it falls back to "all".
+  const activeCategory = category !== 'all' && !state.categories.includes(category) ? 'all' : category
+
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return state.expenses
       .filter((e) => (scope === 'month' ? monthOf(e.date) === month : true))
-      .filter((e) => (category === 'all' ? true : e.category === category))
+      .filter((e) => (activeCategory === 'all' ? true : e.category === activeCategory))
       .filter((e) =>
         needle === ''
           ? true
@@ -40,7 +46,7 @@ export function Expenses({
             formatTaka(e.amountPaisa).includes(needle),
       )
       .sort((a, b) => b.date.localeCompare(a.date) || b.amountPaisa - a.amountPaisa)
-  }, [state.expenses, search, category, scope, month])
+  }, [state.expenses, search, activeCategory, scope, month])
 
   const visibleTotal = visible.reduce((acc, e) => acc + e.amountPaisa, 0)
 
@@ -71,9 +77,9 @@ export function Expenses({
           </div>
           <div className="field">
             <label htmlFor="expense-category">Category</label>
-            <select id="expense-category" value={category} onChange={(e) => setCategory(e.target.value as Category | 'all')}>
+            <select id="expense-category" value={activeCategory} onChange={(e) => setCategory(e.target.value)}>
               <option value="all">All categories</option>
-              {CATEGORIES.map((c) => (
+              {state.categories.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
@@ -127,6 +133,8 @@ export function Expenses({
         )}
       </section>
 
+      <Categories state={state} dispatch={dispatch} onFlash={setFlash} />
+
       {adding ? (
         <Modal
           title="Add an expense"
@@ -134,8 +142,9 @@ export function Expenses({
           onClose={() => setAdding(false)}
         >
           <ExpenseForm
-            initial={{ date: `${month}-01`, category: 'Food', shop: '', amount: '' }}
+            initial={{ date: `${month}-01`, category: resolveCategory(state.categories, 'Food'), shop: '', amount: '' }}
             submitLabel="Save expense"
+            categories={state.categories}
             onCancel={() => setAdding(false)}
             onSubmit={(draft) => {
               dispatch({
@@ -161,6 +170,7 @@ export function Expenses({
           <ExpenseForm
             initial={toDraft(editing)}
             submitLabel="Save changes"
+            categories={state.categories}
             onCancel={() => setEditing(null)}
             onSubmit={(draft) => {
               dispatch({

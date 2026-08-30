@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { migrate, validateLedgerState } from '../store/validate'
-import { SCHEMA_VERSION } from '../domain/types'
+import { defaultCategories } from '../domain/categories'
+import { DEFAULT_CATEGORIES, FALLBACK_CATEGORY, SCHEMA_VERSION } from '../domain/types'
 import { taka } from './helpers'
 
 const validBlob = {
@@ -109,5 +110,47 @@ describe('local data migration', () => {
     expect(state).not.toBeNull()
     expect(state!.schemaVersion).toBe(SCHEMA_VERSION)
     expect(issues.join(' ')).toMatch(/newer version of this app/)
+  })
+})
+
+describe('stored expense categories', () => {
+  it('defaults to the built-in list when none was stored, without complaining', () => {
+    const { state, issues } = validateLedgerState(validBlob)
+    expect(issues).toEqual([])
+    expect(state!.categories).toEqual(defaultCategories())
+  })
+
+  it('keeps a user-created category and the expenses filed under it', () => {
+    const { state, issues } = validateLedgerState({
+      ...validBlob,
+      categories: ['Rent', 'Street food', 'Other'],
+      expenses: [
+        validBlob.expenses[0],
+        { id: 'E2', date: '2026-04-06', category: 'Street food', shop: 'Stall', amountPaisa: 12000, source: 'manual' },
+      ],
+    })
+    expect(issues).toEqual([])
+    expect(state!.categories).toEqual(['Rent', 'Street food', 'Other'])
+    expect(state!.expenses[1].category).toBe('Street food')
+  })
+
+  it('re-adds the fallback category and drops unusable entries', () => {
+    const { state, issues } = validateLedgerState({ ...validBlob, categories: ['Rent', 'rent', '', 42] })
+    expect(state!.categories).toEqual(['Rent', FALLBACK_CATEGORY])
+    expect(issues.join(' ')).toMatch(/not a usable name/)
+  })
+
+  it('falls back to the built-in list when the stored list has nothing usable', () => {
+    const { state, issues } = validateLedgerState({ ...validBlob, categories: [] })
+    expect(state!.categories).toEqual(defaultCategories())
+    expect(issues.join(' ')).toMatch(/category list was empty/)
+  })
+
+  it('migrates a v2 blob by giving it the built-in category list', () => {
+    const issues: string[] = []
+    const migrated = migrate({ schemaVersion: 2, expenses: [], pockets: [] }, issues)
+    expect(migrated.schemaVersion).toBe(SCHEMA_VERSION)
+    expect(migrated.categories).toEqual([...DEFAULT_CATEGORIES])
+    expect(issues.join(' ')).toMatch(/schema v2 to v3/)
   })
 })
