@@ -1,3 +1,4 @@
+import { defaultCategories } from '../domain/categories'
 import { parseTakaToPaisa } from '../domain/money'
 import { SCHEMA_VERSION, type Category, type Expense, type LedgerState } from '../domain/types'
 
@@ -22,6 +23,7 @@ export function ledger(partial: Partial<LedgerState> = {}): LedgerState {
     salaryByMonth: {},
     expenses: [],
     pockets: [],
+    categories: defaultCategories(),
     dpsAnnualRatePercent: 8,
     referenceDate: '2026-04-17',
     fixtureCaseId: null,

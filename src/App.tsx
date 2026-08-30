@@ -266,6 +266,7 @@ export default function App() {
             <ReceiptScanner
               referenceDate={state.referenceDate}
               month={month}
+              categories={state.categories}
               onSave={(expense) => {
                 dispatch({ type: 'addExpense', expense })
                 setMonth(monthOf(expense.date))

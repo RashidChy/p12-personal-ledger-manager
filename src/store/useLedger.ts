@@ -7,9 +7,15 @@
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { defaultLedgerState, ledgerStateFromCase, getCase } from '../data/fixture'
+import {
+  addCategory,
+  deleteCategory,
+  renameCategory,
+  type CategoryResult,
+} from '../domain/categories'
 import type { IsoDate, MonthKey } from '../domain/dates'
 import type { Paisa } from '../domain/money'
-import type { Expense, LedgerState, Pocket } from '../domain/types'
+import type { Category, Expense, LedgerState, Pocket } from '../domain/types'
 import { loadState, saveState, clearState, isStorageAvailable } from './storage'
 
 export type LedgerAction =
@@ -22,8 +28,25 @@ export type LedgerAction =
   | { type: 'addPocket'; pocket: Pocket }
   | { type: 'updatePocket'; pocket: Pocket }
   | { type: 'deletePocket'; id: string }
+  | { type: 'addCategory'; name: string }
+  | { type: 'renameCategory'; from: Category; to: string }
+  | { type: 'deleteCategory'; name: Category; reassignTo: Category }
   | { type: 'setReferenceDate'; date: IsoDate }
   | { type: 'setDpsRate'; percent: number }
+
+/**
+ * Category edits are validated in the UI before they are dispatched; a request
+ * the domain rejects here leaves the ledger untouched rather than half-applied.
+ */
+function applyCategoryChange(state: LedgerState, result: CategoryResult): LedgerState {
+  if (!result.ok) return state
+  return {
+    ...state,
+    categories: result.change.categories,
+    expenses: result.change.expenses,
+    updatedAt: new Date().toISOString(),
+  }
+}
 
 function reducer(state: LedgerState, action: LedgerAction): LedgerState {
   const touched = (next: LedgerState): LedgerState => ({ ...next, updatedAt: new Date().toISOString() })
@@ -56,6 +79,12 @@ function reducer(state: LedgerState, action: LedgerAction): LedgerState {
       })
     case 'deletePocket':
       return touched({ ...state, pockets: state.pockets.filter((p) => p.id !== action.id) })
+    case 'addCategory':
+      return applyCategoryChange(state, addCategory(state, action.name))
+    case 'renameCategory':
+      return applyCategoryChange(state, renameCategory(state, action.from, action.to))
+    case 'deleteCategory':
+      return applyCategoryChange(state, deleteCategory(state, action.name, action.reassignTo))
     case 'setReferenceDate':
       return touched({ ...state, referenceDate: action.date })
     case 'setDpsRate':

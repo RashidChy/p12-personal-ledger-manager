@@ -7,11 +7,12 @@
  * WASM engine and English model served from this app's own /ocr/ directory.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { resolveCategory } from '../domain/categories'
 import { formatIsoDate, type IsoDate, type MonthKey } from '../domain/dates'
 import { formatTaka } from '../domain/format'
 import { parseTakaToPaisa } from '../domain/money'
 import { REVIEW_THRESHOLD, parseReceiptText, type ParsedReceipt } from '../domain/receiptParse'
-import type { Expense } from '../domain/types'
+import type { Category, Expense } from '../domain/types'
 import {
   MAX_FILE_BYTES,
   recognizeReceipt,
@@ -34,10 +35,13 @@ const SAMPLES = [
 export function ReceiptScanner({
   referenceDate,
   month,
+  categories,
   onSave,
 }: {
   referenceDate: IsoDate
   month: MonthKey
+  /** The user's category list; the suggestion is mapped onto it. */
+  categories: readonly Category[]
   onSave: (expense: Expense) => void
 }) {
   const [phase, setPhase] = useState<Phase>('idle')
@@ -120,7 +124,7 @@ export function ReceiptScanner({
         setParsed(parsedReceipt)
         setDraft({
           date: parsedReceipt.date.value ?? '',
-          category: parsedReceipt.suggestedCategory,
+          category: resolveCategory(categories, parsedReceipt.suggestedCategory),
           shop: parsedReceipt.merchant.value ?? '',
           amount: parsedReceipt.amount.value === null ? '' : (parsedReceipt.amount.value / 100).toFixed(2),
         })
@@ -143,7 +147,7 @@ export function ReceiptScanner({
         if (ocrRunId.current !== runId && activeOcrRuns.current === 0) void terminateOcr()
       }
     },
-    [referenceDate],
+    [referenceDate, categories],
   )
 
   const acceptFile = useCallback(
@@ -390,6 +394,7 @@ export function ReceiptScanner({
                 <ExpenseFields
                   draft={draft}
                   errors={errors}
+                  categories={categories}
                   idPrefix="receipt"
                   onChange={(next) => {
                     setDraft(next)

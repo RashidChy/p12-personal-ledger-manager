@@ -417,6 +417,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* ---------- forms and buttons ---------- */
 
 .field { display: grid; gap: 6px; min-width: 0; }
+.field-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.field-row > input, .field-row > select { width: auto; min-width: 0; flex: 1 1 160px; }
+.field-row > button { flex: none; white-space: nowrap; }
 .field > label, .label { color: var(--text-muted); font-size: 0.81rem; font-weight: 680; }
 .hint { color: var(--text-dim); font-size: 0.78rem; line-height: 1.45; }
 .error-text { color: var(--critical); font-size: 0.8rem; font-weight: 620; }

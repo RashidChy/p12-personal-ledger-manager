@@ -63,6 +63,7 @@ describe('receipt scanner cancellation', () => {
         createElement(ReceiptScanner, {
           referenceDate: '2026-04-14',
           month: '2026-04',
+          categories: ['Food', 'Other'],
           onSave: vi.fn(),
         }),
       )
