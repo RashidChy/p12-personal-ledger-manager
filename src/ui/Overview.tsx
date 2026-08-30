@@ -220,7 +220,7 @@ export function Overview({
           <h2 id="insights-title">Insights for {monthLabel(month)}</h2>
           <span className="tiny muted">generated from this month's records</span>
         </div>
-        <InsightList insights={insights.slice(0, 4)} />
+        <InsightList insights={insights.slice(0, 5)} />
       </section>
 
       <section className="card" aria-labelledby="pockets-title">

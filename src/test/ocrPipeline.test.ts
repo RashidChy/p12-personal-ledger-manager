@@ -31,6 +31,14 @@ describe('parsing real Tesseract output from the sample receipts', () => {
     expect(values).toContain(taka('95.00')) // its actual price
   })
 
+  it('ignores reference numbers and quantity multipliers on the restaurant bill', () => {
+    const parsed = parseReceiptText(OCR_SAMPLES['sultans-dine.png'].text, REFERENCE)
+    const values = parsed.amountCandidates.map((c) => c.amountPaisa)
+    expect(values).not.toContain(taka('8821.00')) // "Bill No 8821"
+    expect(values).not.toContain(taka('2.00')) // the "2 x" quantity
+    expect(values).toContain(taka('1617.00'))
+  })
+
   it('reads the restaurant bill and prefers "TOTAL PAYABLE" over the subtotal', () => {
     const parsed = parseReceiptText(OCR_SAMPLES['sultans-dine.png'].text, REFERENCE)
     expect(parsed.merchant.value).toBe('Sultans Dine')

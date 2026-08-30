@@ -180,7 +180,9 @@ export default function App() {
 
       <footer className="footer">
         Data stays on this device · {state.expenses.length} expenses · {state.pockets.length} pockets ·{' '}
-        {status.lastSavedAt ? `saved locally at ${new Date(status.lastSavedAt).toLocaleTimeString()}` : 'not saved yet'}
+        {status.lastSavedAt
+          ? `saved on this device at ${new Date(status.lastSavedAt).toLocaleTimeString()}`
+          : 'official sample data · nothing changed yet'}
         {status.restoredFromDevice ? ' · restored from this device' : ''}
       </footer>
 

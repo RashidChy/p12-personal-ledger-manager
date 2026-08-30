@@ -110,6 +110,10 @@ export function extractAmountsFromLine(line: string): Paisa[] {
     // Quantities with a unit suffix ("100g", "5kg", "10s", "1L") are item
     // sizes, not prices.
     .replace(/\b\d+(?:\.\d+)?\s*(?:kgs?|gms?|g|mg|ml|ltr|l|pcs?|pkt|s)\b/gi, ' ')
+    // Reference numbers: "Bill No 8821", "Memo 55120", "Table 12", "Token #4".
+    .replace(/\b(?:bill|memo|invoice|order|token|table|ref|receipt|no|#)\s*(?:no\.?|#|:)?\s*\d+/gi, ' ')
+    // Quantity multipliers: the "2 x" of "2 x 650" is a count, not money.
+    .replace(/\b\d+(?:\.\d+)?\s*[x*]\s*/gi, ' ')
 
   MONEY_TOKEN.lastIndex = 0
   let match: RegExpExecArray | null
@@ -175,10 +179,12 @@ export function parseAmount(lines: string[]): {
 
   candidates.sort((a, b) => b.score - a.score || b.amountPaisa - a.amountPaisa)
   const best = candidates[0]
-  const distinct = new Set(candidates.map((c) => c.amountPaisa))
-  if (distinct.size > 1) {
+  // Report the number the user can actually see in the candidate list, so the
+  // warning and the "use this instead" chips always agree.
+  const listed = dedupeCandidates(candidates).slice(0, 8)
+  if (listed.length > 1) {
     warnings.push(
-      `${distinct.size} monetary values were found on this receipt; the highest-confidence total was selected. Check it against the image.`,
+      `${listed.length} different monetary values were found on this receipt; the highest-confidence total was selected. Check it against the image.`,
     )
   }
 
@@ -207,7 +213,7 @@ export function parseAmount(lines: string[]): {
 
   return {
     field: { value: best.amountPaisa, confidence, reason, needsReview: confidence < REVIEW_THRESHOLD },
-    candidates: dedupeCandidates(candidates).slice(0, 8),
+    candidates: listed,
     warnings,
   }
 }
