@@ -18,12 +18,16 @@ for (const d of [outDir, coreDir, langDir]) mkdirSync(d, { recursive: true })
 
 copyFileSync(join(root, 'node_modules/tesseract.js/dist/worker.min.js'), join(outDir, 'worker.min.js'))
 
-// Only the LSTM cores are needed: the app never enables `legacyCore`.
+// Only the LSTM cores are needed (the app never enables `legacyCore`), but all
+// three SIMD variants must ship: Tesseract picks relaxed-SIMD, SIMD or plain
+// depending on what the visitor's browser supports.
 const CORE_FILES = [
   'tesseract-core-lstm.wasm.js',
   'tesseract-core-lstm.wasm',
   'tesseract-core-simd-lstm.wasm.js',
   'tesseract-core-simd-lstm.wasm',
+  'tesseract-core-relaxedsimd-lstm.wasm.js',
+  'tesseract-core-relaxedsimd-lstm.wasm',
 ]
 for (const f of CORE_FILES) {
   const src = join(root, 'node_modules/tesseract.js-core', f)

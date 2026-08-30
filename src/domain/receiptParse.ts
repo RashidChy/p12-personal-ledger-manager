@@ -95,7 +95,7 @@ export function extractAmountsFromLine(line: string): Paisa[] {
   const prepared = line
     .split(/(\s+)/)
     .map((token) =>
-      /^[\d,.\-]*[OolI|SsBZz][\dOolI|SsBZz,.\-]*$/.test(token) && /\d/.test(token)
+      /^[\d,.-]*[OolI|SsBZz][\dOolI|SsBZz,.-]*$/.test(token) && /\d/.test(token)
         ? normaliseNumericToken(token)
         : token,
     )
@@ -107,6 +107,9 @@ export function extractAmountsFromLine(line: string): Paisa[] {
     .replace(/\b\d{1,2}:\d{2}\s*(?:[ap]\.?m\.?)?/gi, ' ')
     .replace(/\b\d{3,}[-\s]\d{3,}\b/g, ' ')
     .replace(/\b\d{7,}\b/g, ' ')
+    // Quantities with a unit suffix ("100g", "5kg", "10s", "1L") are item
+    // sizes, not prices.
+    .replace(/\b\d+(?:\.\d+)?\s*(?:kgs?|gms?|g|mg|ml|ltr|l|pcs?|pkt|s)\b/gi, ' ')
 
   MONEY_TOKEN.lastIndex = 0
   let match: RegExpExecArray | null

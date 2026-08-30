@@ -95,7 +95,7 @@ function validatePocket(raw: unknown, index: number, issues: string[]): Pocket |
 
 /** Migrates any older stored shape up to the current schema version. */
 export function migrate(raw: Record<string, unknown>, issues: string[]): Record<string, unknown> {
-  let data = { ...raw }
+  const data = { ...raw }
   let version = typeof data.schemaVersion === 'number' ? data.schemaVersion : 1
 
   if (version < 2) {
