@@ -264,7 +264,6 @@ export default function App() {
 
           {tab === 'receipt' ? (
             <ReceiptScanner
-              referenceDate={state.referenceDate}
               month={month}
               categories={state.categories}
               onSave={(expense) => {

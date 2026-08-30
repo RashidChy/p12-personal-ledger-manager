@@ -9,8 +9,8 @@
   "pre_event_materials": [],
   "sample_data": {
     "loads_published_fixture": true,
-    "method": "Select Import fixture JSON in the top bar and choose either the complete P12 Submission Kit fixture or one same-shape case object. The browser validates the file locally, offers a case selector for multi-case files, shows the forecast date, month, salary, record counts and DPS rate for review, and requires explicit confirmation before replacing the ledger. Source: src/ui/FixtureImporter.tsx and src/data/fixtureImport.ts; tests: src/test/fixtureImport.test.ts.",
-    "reset_instructions": "Open Reset to sample data, choose any bundled PUB-01 through PUB-25 case, and confirm. PUB-01 restores the default judging view. Imported files are never uploaded."
+    "method": "Open Data & demo in the top bar, select Import fixture data, and choose either the complete P12 Submission Kit fixture or one same-shape case object. The browser validates the file locally, offers a case selector for multi-case files, shows the forecast date, month, salary, record counts and DPS rate for review, and requires explicit confirmation before replacing the ledger. Source: src/ui/FixtureImporter.tsx and src/data/fixtureImport.ts; tests: src/test/fixtureImport.test.ts.",
+    "reset_instructions": "Open Data & demo, select Restore sample, choose any bundled PUB-01 through PUB-25 case, and confirm. PUB-01 restores the default judging view. Imported files are never uploaded."
   },
   "problem_solving_method": "We mapped the four requirements to visible workflows backed by deterministic domain modules. Money is stored as integer paisa, forecast and DPS assumptions remain visible, receipt OCR requires user review before saving, and the published 25-case fixture plus focused unit tests verify the calculations independently of the React UI. A locally validated, review-before-replace JSON importer lets judges exercise complete P12 fixture envelopes or individual same-shape cases without changing source code.",
   "requirements": {
@@ -76,7 +76,7 @@
     {
       "tool": "OpenAI Codex",
       "used_for": "Architecture, implementation, refactoring, test generation, code review and documentation.",
-      "how_output_was_verified": "The team reviewed the source and ran 125 automated tests, TypeScript checks, ESLint, production builds and browser walkthroughs; calculation behaviour was checked against the published fixture and stated formulas, including complete-fixture and single-case import tests."
+      "how_output_was_verified": "The team reviewed the source and ran 198 automated tests, TypeScript checks, ESLint, production builds and browser walkthroughs; calculation behaviour was checked against the published fixture and stated formulas, including complete-fixture and single-case import tests."
     }
   ],
   "licenses_file": "LICENSES.md",

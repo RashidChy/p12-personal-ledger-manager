@@ -5,8 +5,8 @@
 The demo shows the working product. No architecture talk, no code on screen.
 
 **Before you start:** open the live URL in a clean browser window and, if you have used
-the app before, press **Reset to sample data → PUB-01 → Reset now** so the opening screen
-is the official fixture. Have the Receipt scanner's "Try sample: Supermarket receipt"
+the app before, press **Data & demo → Restore sample → PUB-01 → Reset now** so the opening screen
+is the official fixture. Have the **Scan receipt** page's "Try sample: Supermarket receipt"
 button ready — or a real receipt photo on the device.
 
 ---
@@ -28,7 +28,7 @@ Point at, in order:
 
 ## 0:20–0:45 — Scan a receipt, on the device
 
-Click **Receipt scanner**. Point at the green privacy banner for one second.
+Click **Scan receipt**. Point at the green privacy banner for one second.
 
 > “Receipt OCR runs on this device. The photo never leaves the browser.”
 
@@ -55,7 +55,7 @@ Click **Overview**.
 > “Total spent has moved to **৳28,424.25**, remaining salary to **৳21,575.75**, the
 > Groceries slice has grown, and the forecast and insights have all recalculated.”
 
-Click **Forecast & insights**.
+Click **Forecast**.
 
 > “Spending so far, average daily spend, days remaining, expected additional spend,
 > expected month-end total, and the expected money left — with the forecast date and the
@@ -69,7 +69,8 @@ Point at three insights and read the amounts out loud, e.g.:
 
 ## 1:10–1:25 — Savings pocket and DPS
 
-Click **Savings pockets**, and stay on the first pocket.
+First restore the official baseline with **Data & demo → Restore sample → PUB-01 → Reset now**.
+Then click **Savings**, and stay on the Laptop pocket.
 
 > “The Laptop pocket targets **৳1,45,000** with a planned **৳12,000** a month. The
 > forecast leaves **৳2,206** disposable this month, so the *effective* affordable
@@ -86,7 +87,7 @@ Expand **“Method, contribution timing and month-by-month schedule”** for one
 
 ## 1:25–1:35 — Methodology (brief)
 
-Click **Methodology**, scroll once.
+Click **How it works**, scroll once.
 
 > “Every formula is written down: the run-rate forecast, the affordability rule, the
 > fixture's exact DPS rule, the fixture source, and the privacy behaviour. And if I

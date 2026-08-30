@@ -145,16 +145,196 @@ describe('date extraction', () => {
     expect(extractDatesFromText('31/02/2026')).toHaveLength(0)
   })
 
-  it('prefers a non-future date and warns when the receipt date is ahead of the forecast date', () => {
+  it('warns when the receipt date is ahead of the scan date', () => {
     const parsed = parseReceiptText('Agora\nDate: 20/04/2026\nTotal 300.00', REFERENCE)
     expect(parsed.date.value).toBe('2026-04-20')
     expect(parsed.date.confidence).toBeLessThan(0.5)
-    expect(parsed.warnings.join(' ')).toMatch(/after the forecast date/)
+    expect(parsed.warnings.join(' ')).toMatch(/after the scan date/)
   })
 
   it('flags an ambiguous date for review', () => {
     const parsed = parseReceiptText('Agora\n05/04/2026\nGRAND TOTAL 300.00', REFERENCE)
     expect(parsed.date.value).toBe('2026-04-05')
     expect(parsed.warnings.join(' ')).toMatch(/ambiguous/)
+  })
+})
+
+describe('amount parsing regressions', () => {
+  it('reads an attached currency marker, OCR-confused digits and receipt suffix', () => {
+    const line = 'TOTAL: Tk.1,2S0.OO/-'
+    expect(extractAmountsFromLine(line)).toEqual([taka('1250.00')])
+    expect(parseReceiptText(`Corner Shop\nDate: 17/04/2026\n${line}`, REFERENCE).amount.value).toBe(
+      taka('1250.00'),
+    )
+  })
+
+  it.each([
+    ['TOTAL ৳1,25,000.50', '125000.50'],
+    ['TOTAL BDT 1.250,00', '1250.00'],
+    ['TOTAL 1,250,00', '1250.00'],
+  ])('normalises South Asian and European separators in %s', (line, expected) => {
+    expect(extractAmountsFromLine(line)).toContain(taka(expected))
+  })
+
+  it('transliterates Bengali digits when they appear in OCR text', () => {
+    expect(extractAmountsFromLine('TOTAL ৳১,২৫০.৫০')).toContain(taka('1250.50'))
+    expect(extractDatesFromText('Date: ১৭/০৪/২০২৬')[0].date).toBe('2026-04-17')
+  })
+
+  it('chooses the grand total from collapsed subtotal, VAT, cash and change text', () => {
+    const parsed = parseReceiptText(
+      `Corner Shop
+Date: 17/04/2026
+Subtotal 1,000.00 VAT 150.00 GRAND TOTAL 1,150.00 Cash 2,000.00 Change 850.00`,
+      REFERENCE,
+    )
+    expect(parsed.amount.value).toBe(taka('1150.00'))
+    expect(parsed.amount.reason).toMatch(/grand\/net total/i)
+  })
+
+  it('uses a total label when its amount is on the next line', () => {
+    const parsed = parseReceiptText(
+      `Corner Shop
+Date: 17/04/2026
+GRAND TOTAL
+Tk. 1,250.00`,
+      REFERENCE,
+    )
+    expect(parsed.amount.value).toBe(taka('1250.00'))
+    expect(parsed.amount.needsReview).toBe(false)
+    expect(parsed.amount.reason).toMatch(/grand\/net total/i)
+  })
+
+  it.each([
+    [
+      `Gross Total 1,600.00
+Sub Total 1,500.00
+Discount 200.00
+Total after discount 1,400.00`,
+      '1400.00',
+    ],
+    [
+      `Gross Total 1,200.00
+Sub Total 1,000.00
+VAT 150.00
+Total incl. VAT 1,150.00`,
+      '1150.00',
+    ],
+  ])('prefers an adjusted final total over gross and subtotal values', (totals, expected) => {
+    const parsed = parseReceiptText(`Corner Shop\nDate: 17/04/2026\n${totals}`, REFERENCE)
+    expect(parsed.amount.value).toBe(taka(expected))
+  })
+
+  it('prefers balance due over a larger previous balance', () => {
+    const parsed = parseReceiptText(
+      `Corner Shop
+Date: 17/04/2026
+Previous Balance 5,000.00
+Balance Due 1,250.00`,
+      REFERENCE,
+    )
+    expect(parsed.amount.value).toBe(taka('1250.00'))
+    expect(parsed.amount.value).not.toBe(taka('5000.00'))
+  })
+
+  it('does not invent amounts from medicine strengths, pack sizes or an address number', () => {
+    expect(extractAmountsFromLine('Vitamin D3 320.00')).toEqual([taka('320.00')])
+    expect(extractAmountsFromLine('Sergel 20mg 14s 210.00')).toEqual([taka('210.00')])
+    expect(extractAmountsFromLine('Napa Extra 10s 45.00')).toEqual([taka('45.00')])
+    expect(extractAmountsFromLine('Mirpur 10, Dhaka')).toEqual([])
+  })
+
+  it('does not mistake a total item count for the payable amount', () => {
+    expect(extractAmountsFromLine('TOTAL ITEMS 3')).toEqual([])
+    expect(extractAmountsFromLine('TOTAL ITEMS 3  AMOUNT 250.00')).toEqual([taka('250.00')])
+    const parsed = parseReceiptText(
+      `Corner Shop
+Date: 17/04/2026
+TOTAL ITEMS 3
+AMOUNT 250.00`,
+      REFERENCE,
+    )
+    expect(parsed.amount.value).toBe(taka('250.00'))
+    expect(parsed.amount.value).not.toBe(taka('3.00'))
+  })
+})
+
+describe('date parsing regressions', () => {
+  it('repairs OCR-confused digits in a numeric date', () => {
+    expect(extractDatesFromText('Date: 17-O4-2O26')[0].date).toBe('2026-04-17')
+  })
+
+  it.each([
+    ['17-Apr-2026', '2026-04-17'],
+    ['2026-Apr-17', '2026-04-17'],
+  ])('reads a hyphenated month date in %s', (source, expected) => {
+    expect(extractDatesFromText(source)[0].date).toBe(expected)
+  })
+
+  it('reads a spaced numeric date only when it is labelled as a date', () => {
+    const parsed = parseReceiptText('Corner Shop\nDate: 17 04 2026\nTotal 250.00', REFERENCE)
+    expect(parsed.date.value).toBe('2026-04-17')
+  })
+
+  it.each(['Bill Date', 'Invoice Date'])('%s outranks due, manufacture and expiry dates', (label) => {
+    const parsed = parseReceiptText(
+      `Corner Shop
+MFG Date: 01/03/2026
+${label}: 14/04/2026
+Due Date: 20/04/2026
+Expiry Date: 30/04/2027
+Total 250.00`,
+      REFERENCE,
+    )
+    expect(parsed.date.value).toBe('2026-04-14')
+    expect(parsed.dateCandidates).toEqual(
+      expect.arrayContaining(['2026-03-01', '2026-04-14', '2026-04-20', '2027-04-30']),
+    )
+  })
+})
+
+describe('merchant and category regressions', () => {
+  it('does not let a Paid by bKash line override an unknown merchant', () => {
+    const parsed = parseReceiptText(
+      `Rahman General Store
+Invoice No: 1234
+Date: 17/04/2026
+Paid by bKash
+TOTAL 250.00`,
+      REFERENCE,
+    )
+    expect(parsed.merchant.value).toBe('Rahman General Store')
+    expect(parsed.merchant.value).not.toBe('bKash')
+  })
+
+  it('does not treat an address or reprint marker as a high-confidence merchant', () => {
+    const parsed = parseReceiptText(
+      `House 12, Road 5, Dhanmondi, Dhaka
+REPRINT
+Invoice No: 1234
+Date: 17/04/2026
+TOTAL 250.00`,
+      REFERENCE,
+    )
+    expect(parsed.merchant.value).not.toBe('REPRINT')
+    expect(parsed.merchant.confidence).toBeLessThan(0.7)
+    expect(parsed.merchant.needsReview).toBe(true)
+  })
+
+  it('canonicalises fuzzy SHWAPN0 OCR text and suggests Groceries', () => {
+    const parsed = parseReceiptText(
+      `SHWAPN0
+Dhanmondi Branch, Dhaka
+Date: 17/04/2026
+GRAND TOTAL 1,250.00`,
+      REFERENCE,
+    )
+    expect(parsed.merchant.value).toBe('Shwapno')
+    expect(parsed.suggestedCategory).toBe('Groceries')
+  })
+
+  it('uses the merchant before incidental water and ticket item words', () => {
+    expect(suggestCategory('Sultans Dine', 'Mineral water 500ml').category).toBe('Food')
+    expect(suggestCategory('Star Cineplex', 'Movie ticket').category).toBe('Entertainment')
   })
 })

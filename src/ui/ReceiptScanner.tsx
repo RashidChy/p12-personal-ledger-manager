@@ -8,10 +8,19 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { resolveCategory } from '../domain/categories'
-import { formatIsoDate, type IsoDate, type MonthKey } from '../domain/dates'
+import { formatIsoDate, todayIso, type IsoDate, type MonthKey } from '../domain/dates'
 import { formatTaka } from '../domain/format'
 import { parseTakaToPaisa } from '../domain/money'
 import { REVIEW_THRESHOLD, parseReceiptText, type ParsedReceipt } from '../domain/receiptParse'
+import {
+  chooseBestReceiptScan,
+  needsEnhancedReceiptPass,
+  receiptScanDisagreements,
+  reconcileReceiptScans,
+  type ReceiptScanCandidate,
+  type ReceiptScanDisagreement,
+  type ReceiptScanMode,
+} from '../domain/receiptReliability'
 import type { Category, Expense } from '../domain/types'
 import {
   MAX_FILE_BYTES,
@@ -33,12 +42,10 @@ const SAMPLES = [
 ]
 
 export function ReceiptScanner({
-  referenceDate,
   month,
   categories,
   onSave,
 }: {
-  referenceDate: IsoDate
   month: MonthKey
   /** The user's category list; the suggestion is mapped onto it. */
   categories: readonly Category[]
@@ -58,13 +65,22 @@ export function ReceiptScanner({
   const [dragging, setDragging] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
   const [durationMs, setDurationMs] = useState<number | null>(null)
+  const [scanMode, setScanMode] = useState<ReceiptScanMode | null>(null)
+  const [scanPasses, setScanPasses] = useState(0)
+  const [scanDisagreements, setScanDisagreements] = useState<ReceiptScanDisagreement[]>([])
+  const [reviewConfirmed, setReviewConfirmed] = useState(false)
+  const [loadingSample, setLoadingSample] = useState<string | null>(null)
   const lastFile = useRef<File | null>(null)
+  const bestScan = useRef<ReceiptScanCandidate | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const resultHeadingRef = useRef<HTMLHeadingElement>(null)
   // Every scan owns a monotonically increasing token. Resetting, cancelling or
   // starting another scan invalidates the old token, so a late worker result can
   // never reopen the review form after the user has left the scan.
   const ocrRunId = useRef(0)
-  const activeOcrRuns = useRef(0)
+  const sampleRunId = useRef(0)
+  const sampleAbort = useRef<AbortController | null>(null)
+  const activeOcrAbort = useRef<AbortController | null>(null)
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -73,16 +89,25 @@ export function ReceiptScanner({
   // Release the OCR worker (and its WASM memory) when the scanner unmounts.
   useEffect(() => () => {
     ocrRunId.current += 1
-    // Tesseract logs an internal worker error if it is terminated in the middle
-    // of recognize(). A stale in-flight run cleans up safely in its finally
-    // block; an idle worker can be released immediately.
-    if (activeOcrRuns.current === 0) void terminateOcr()
+    sampleRunId.current += 1
+    sampleAbort.current?.abort()
+    activeOcrAbort.current?.abort()
+    void terminateOcr()
   }, [])
+
+  useEffect(() => {
+    if (phase === 'review' || phase === 'failed') resultHeadingRef.current?.focus()
+  }, [phase])
 
   const reset = useCallback(
     (keepMessage = false) => {
       ocrRunId.current += 1
-      if (activeOcrRuns.current === 0) void terminateOcr()
+      sampleRunId.current += 1
+      sampleAbort.current?.abort()
+      sampleAbort.current = null
+      activeOcrAbort.current?.abort()
+      activeOcrAbort.current = null
+      void terminateOcr()
       setPhase('idle')
       setParsed(null)
       setDraft(null)
@@ -92,6 +117,11 @@ export function ReceiptScanner({
       setRawText('')
       setEngineConfidence(null)
       setDurationMs(null)
+      setScanMode(null)
+      setScanPasses(0)
+      setScanDisagreements([])
+      setReviewConfirmed(false)
+      setLoadingSample(null)
       if (!keepMessage) setSaved(null)
       setPreviewUrl((url) => {
         if (url) URL.revokeObjectURL(url)
@@ -99,28 +129,83 @@ export function ReceiptScanner({
       })
       setFileName(null)
       lastFile.current = null
+      bestScan.current = null
       if (inputRef.current) inputRef.current.value = ''
     },
     [],
   )
 
   const runOcr = useCallback(
-    async (file: File) => {
+    async (file: File, options: { forceEnhanced?: boolean } = {}) => {
       const runId = ++ocrRunId.current
-      activeOcrRuns.current += 1
+      activeOcrAbort.current?.abort()
+      const controller = new AbortController()
+      activeOcrAbort.current = controller
+      const prior = options.forceEnhanced ? bestScan.current : null
       setPhase('scanning')
       setOcrError(null)
       setSaved(null)
+      setParsed(null)
+      setDraft(null)
+      setErrors({})
+      setRawText('')
+      setEngineConfidence(null)
+      setDurationMs(null)
+      setScanMode(null)
+      setScanPasses(0)
+      setScanDisagreements([])
+      setReviewConfirmed(false)
       setProgress({ status: 'starting', progress: 0, label: 'Starting the on-device OCR engine' })
       try {
-        const result = await recognizeReceipt(file, (p) => {
-          if (ocrRunId.current === runId) setProgress(p)
-        })
+        const attempts: ReceiptScanCandidate[] = []
+        const runPass = async (mode: ReceiptScanMode, start: number, span: number, prefix: string) => {
+          const result = await recognizeReceipt(
+            file,
+            (p) => {
+              if (ocrRunId.current !== runId) return
+              setProgress({ ...p, progress: Math.min(1, start + p.progress * span), label: `${prefix}: ${p.label}` })
+            },
+            { mode, signal: controller.signal },
+          )
+          const candidate: ReceiptScanCandidate = {
+            mode,
+            text: result.text,
+            engineConfidence: result.confidence,
+            durationMs: result.durationMs,
+            parsed: parseReceiptText(result.text, todayIso()),
+          }
+          attempts.push(candidate)
+          return candidate
+        }
+
+        const firstMode: ReceiptScanMode = options.forceEnhanced ? 'enhanced' : 'standard'
+        const first = await runPass(firstMode, 0, options.forceEnhanced ? 1 : 0.58, options.forceEnhanced ? 'Enhanced pass' : 'First pass')
         if (ocrRunId.current !== runId) return
-        setRawText(result.text)
-        setEngineConfidence(result.confidence)
-        setDurationMs(result.durationMs)
-        const parsedReceipt = parseReceiptText(result.text, referenceDate)
+
+        if (!options.forceEnhanced && needsEnhancedReceiptPass(first)) {
+          setProgress({
+            status: 'enhancing image',
+            progress: 0.6,
+            label: 'First pass was uncertain — enhancing contrast and checking again',
+          })
+          await runPass('enhanced', 0.62, 0.38, 'Accuracy pass')
+          if (ocrRunId.current !== runId) return
+        }
+
+        const eligible = prior ? [prior, ...attempts] : attempts
+        const disagreements = receiptScanDisagreements(eligible)
+        const selectedBase = chooseBestReceiptScan(eligible)
+        const selected = reconcileReceiptScans(eligible)
+        // Keep the untouched candidate for a later manual re-scan so an old
+        // disagreement warning cannot leak into a new comparison.
+        bestScan.current = selectedBase
+        const parsedReceipt = selected.parsed
+        setRawText(selected.text)
+        setEngineConfidence(selected.engineConfidence)
+        setDurationMs(attempts.reduce((total, attempt) => total + attempt.durationMs, 0))
+        setScanMode(selected.mode)
+        setScanPasses(eligible.length)
+        setScanDisagreements(disagreements)
         setParsed(parsedReceipt)
         setDraft({
           date: parsedReceipt.date.value ?? '',
@@ -130,28 +215,24 @@ export function ReceiptScanner({
         })
         setPhase('review')
       } catch (error) {
-        // Cancellation terminates the worker, which rejects the pending OCR
-        // promise. A stale run is intentional and must not show an error or
-        // transition back into the scanner.
+        // A stale run is intentional and must not show an error or transition
+        // back into the scanner after the user cancelled or chose another file.
         if (ocrRunId.current !== runId) return
-        setOcrError(
-          error instanceof Error
-            ? `The receipt could not be read (${error.message}). This can happen if the OCR engine failed to load. Retry, or enter the expense manually.`
-            : 'The receipt could not be read. Retry, or enter the expense manually.',
-        )
+        setOcrError(describeOcrFailure(error))
         setPhase('failed')
       } finally {
-        activeOcrRuns.current -= 1
-        // If this generation was cancelled and no newer scan is using the
-        // shared worker, release it after recognition has settled cleanly.
-        if (ocrRunId.current !== runId && activeOcrRuns.current === 0) void terminateOcr()
+        if (activeOcrAbort.current === controller) activeOcrAbort.current = null
       }
     },
-    [referenceDate, categories],
+    [categories],
   )
 
   const acceptFile = useCallback(
     (file: File) => {
+      sampleRunId.current += 1
+      sampleAbort.current?.abort()
+      sampleAbort.current = null
+      setLoadingSample(null)
       const validation = validateReceiptFile(file)
       if (!validation.ok) {
         setFileError(validation.error)
@@ -159,6 +240,7 @@ export function ReceiptScanner({
         return
       }
       setFileError(null)
+      bestScan.current = null
       lastFile.current = file
       setFileName(file.name)
       setPreviewUrl((old) => {
@@ -172,33 +254,70 @@ export function ReceiptScanner({
 
   const loadSample = useCallback(
     async (sample: string) => {
+      const requestId = ++sampleRunId.current
+      sampleAbort.current?.abort()
+      const controller = new AbortController()
+      sampleAbort.current = controller
       setFileError(null)
+      setLoadingSample(sample)
       try {
         const base = (import.meta.env?.BASE_URL ?? '/').replace(/\/$/, '')
-        const response = await fetch(`${base}/sample-receipts/${sample}`)
+        const response = await fetch(`${base}/sample-receipts/${sample}`, { signal: controller.signal })
         if (!response.ok) throw new Error(`sample not found (${response.status})`)
         const blob = await response.blob()
+        if (sampleRunId.current !== requestId) return
+        sampleAbort.current = null
         acceptFile(new File([blob], sample, { type: blob.type || 'image/png' }))
       } catch (error) {
+        if (controller.signal.aborted || sampleRunId.current !== requestId) return
+        sampleAbort.current = null
         setFileError(
           `The sample receipt could not be loaded (${error instanceof Error ? error.message : 'unknown error'}). Upload your own image instead.`,
         )
+      } finally {
+        if (sampleRunId.current === requestId) setLoadingSample(null)
       }
     },
     [acceptFile],
   )
 
   const startManualEntry = () => {
-    setDraft({ date: `${month}-01`, category: 'Food', shop: '', amount: '' })
+    ocrRunId.current += 1
+    sampleRunId.current += 1
+    sampleAbort.current?.abort()
+    sampleAbort.current = null
+    activeOcrAbort.current?.abort()
+    activeOcrAbort.current = null
+    void terminateOcr()
+    setLoadingSample(null)
+    setDraft({ date: `${month}-01`, category: resolveCategory(categories, 'Food'), shop: '', amount: '' })
     setParsed(null)
+    setRawText('')
+    setEngineConfidence(null)
+    setDurationMs(null)
+    setScanMode(null)
+    setScanPasses(0)
+    setScanDisagreements([])
+    setReviewConfirmed(false)
     setPhase('review')
   }
+
+  const reviewFieldNames = parsed
+    ? [
+        parsed.merchant.needsReview ? 'merchant' : null,
+        parsed.date.needsReview ? 'date' : null,
+        parsed.amount.needsReview ? 'amount' : null,
+      ].filter((name): name is string => name !== null)
+    : []
+  const requiresReviewConfirmation =
+    parsed !== null && (reviewFieldNames.length > 0 || (engineConfidence !== null && engineConfidence < 72))
 
   const handleSave = () => {
     if (!draft) return
     const found = validateDraft(draft)
     setErrors(found)
     if (Object.keys(found).length > 0) return
+    if (requiresReviewConfirmation && !reviewConfirmed) return
     const corrections = describeCorrections(parsed, draft)
     onSave({
       id: newId('rcpt'),
@@ -266,7 +385,7 @@ export function ReceiptScanner({
           >
             <span className="dropzone-icon" aria-hidden="true">🧾</span>
             <strong>Drop a photo of a bill or receipt here</strong>
-            <span className="small muted">or choose a file from this device</span>
+            <span className="small muted">Keep the whole receipt in frame, flatten it, and avoid glare or deep shadows.</span>
             <label className="visually-hidden" htmlFor="receipt-input">
               Receipt image
             </label>
@@ -275,6 +394,7 @@ export function ReceiptScanner({
               id="receipt-input"
               type="file"
               accept="image/jpeg,image/png,image/webp,image/bmp"
+              capture="environment"
               style={{ maxWidth: 320 }}
               onChange={(e) => {
                 const file = e.target.files?.[0]
@@ -283,8 +403,14 @@ export function ReceiptScanner({
             />
             <div className="chips">
               {SAMPLES.map((sample) => (
-                <button key={sample.file} type="button" className="small" onClick={() => void loadSample(sample.file)}>
-                  Try sample: {sample.label}
+                <button
+                  key={sample.file}
+                  type="button"
+                  className="small"
+                  disabled={loadingSample !== null}
+                  onClick={() => void loadSample(sample.file)}
+                >
+                  {loadingSample === sample.file ? 'Loading sample…' : `Try sample: ${sample.label}`}
                 </button>
               ))}
             </div>
@@ -324,12 +450,12 @@ export function ReceiptScanner({
 
           <section className="card" aria-labelledby="extract-title">
             <div className="card-title">
-              <h2 id="extract-title">
+              <h2 id="extract-title" ref={resultHeadingRef} tabIndex={-1}>
                 {phase === 'scanning' ? 'Reading the receipt' : phase === 'failed' ? 'Scan failed' : 'Review and correct'}
               </h2>
               {engineConfidence !== null ? (
-                <Badge tone={engineConfidence >= 70 ? 'positive' : engineConfidence >= 45 ? 'warning' : 'critical'}>
-                  OCR confidence {engineConfidence.toFixed(0)}%
+                <Badge tone={engineConfidence >= 80 ? 'positive' : engineConfidence >= 50 ? 'warning' : 'critical'}>
+                  Text quality {engineConfidence.toFixed(0)}%
                 </Badge>
               ) : null}
             </div>
@@ -391,6 +517,30 @@ export function ReceiptScanner({
                   </Notice>
                 ) : null}
 
+                {parsed && (scanPasses > 1 || scanMode === 'enhanced') ? (
+                  <Notice tone="info" title={scanMode === 'enhanced' ? 'Enhanced scan selected.' : 'Two-pass check completed.'}>
+                    {scanPasses > 1
+                      ? 'The first read contained uncertainty, so the app enhanced contrast and checked the receipt again.'
+                      : 'This re-scan used contrast enhancement and a receipt-focused text layout.'}{' '}
+                    The stronger set of extracted fields is shown below.
+                  </Notice>
+                ) : null}
+
+                {scanDisagreements.length > 0 ? (
+                  <Notice tone="warning" title="The OCR passes disagreed.">
+                    {scanDisagreements.map(formatScanDisagreement).join(' ')} Check the receipt image and choose or type the correct value.
+                  </Notice>
+                ) : null}
+
+                {requiresReviewConfirmation ? (
+                  <Notice tone="warning" title="Please verify this uncertain scan result before saving.">
+                    {reviewFieldNames.length > 0
+                      ? `Check the ${reviewFieldNames.join(', ')} against the receipt image.`
+                      : 'The overall text quality was low even though the fields were found.'}{' '}
+                    OCR can mistake digits, so use the alternatives below or type the correct value.
+                  </Notice>
+                ) : null}
+
                 <ExpenseFields
                   draft={draft}
                   errors={errors}
@@ -398,6 +548,7 @@ export function ReceiptScanner({
                   idPrefix="receipt"
                   onChange={(next) => {
                     setDraft(next)
+                    setReviewConfirmed(false)
                     if (Object.keys(errors).length > 0) setErrors(validateDraft(next))
                   }}
                 />
@@ -408,37 +559,77 @@ export function ReceiptScanner({
                   </Method>
                 ) : null}
 
+                {parsed && parsed.dateCandidates.length > 1 ? (
+                  <div className="field">
+                    <span className="label">Dates found on this receipt</span>
+                    <div className="candidate-options">
+                      {parsed.dateCandidates.map((date) => (
+                        <button
+                          key={date}
+                          type="button"
+                          className={draft.date === date ? 'candidate-option selected' : 'candidate-option'}
+                          onClick={() => {
+                            setDraft({ ...draft, date })
+                            setReviewConfirmed(false)
+                          }}
+                        >
+                          <strong>{formatIsoDate(date)}</strong>
+                          <span>{draft.date === date ? 'Currently selected' : 'Use this date'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {parsed && parsed.amountCandidates.length > 1 ? (
                   <div className="field">
-                    <span className="label">Other amounts found on this receipt</span>
-                    <div className="chips">
+                    <span className="label">Amounts found on this receipt</span>
+                    <div className="candidate-options">
                       {parsed.amountCandidates.map((c) => (
                         <button
                           key={`${c.amountPaisa}-${c.label}`}
                           type="button"
-                          className="small"
-                          onClick={() => setDraft({ ...draft, amount: (c.amountPaisa / 100).toFixed(2) })}
-                          title={c.line}
+                          className={draft.amount === (c.amountPaisa / 100).toFixed(2) ? 'candidate-option selected' : 'candidate-option'}
+                          onClick={() => {
+                            setDraft({ ...draft, amount: (c.amountPaisa / 100).toFixed(2) })
+                            setReviewConfirmed(false)
+                          }}
                         >
-                          Use {formatTaka(c.amountPaisa)}
-                          <span className="visually-hidden"> from line: {c.line}</span>
+                          <strong>{formatTaka(c.amountPaisa)}</strong>
+                          <span>{c.label} · “{c.line}”</span>
                         </button>
                       ))}
                     </div>
-                    <span className="hint">Tap one to use it instead. Hover or focus to see the line it came from.</span>
+                    <span className="hint">Choose the value that matches the payable total on the image.</span>
                   </div>
                 ) : null}
 
+                {requiresReviewConfirmation ? (
+                  <label className="review-confirmation">
+                    <input
+                      type="checkbox"
+                      checked={reviewConfirmed}
+                      onChange={(event) => setReviewConfirmed(event.target.checked)}
+                    />
+                    <span>I checked the flagged fields against the receipt image.</span>
+                  </label>
+                ) : null}
+
                 <div className="form-actions">
-                  <button type="button" className="primary" onClick={handleSave}>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={handleSave}
+                    disabled={requiresReviewConfirmation && !reviewConfirmed}
+                  >
                     Save expense
                   </button>
                   <button
                     type="button"
-                    onClick={() => lastFile.current && void runOcr(lastFile.current)}
+                    onClick={() => lastFile.current && void runOcr(lastFile.current, { forceEnhanced: true })}
                     disabled={!lastFile.current}
                   >
-                    Re-scan image
+                    Enhance &amp; re-scan
                   </button>
                   <button type="button" className="ghost" onClick={() => reset()}>
                     Cancel without saving
@@ -522,6 +713,28 @@ function ExtractionSummary({ parsed, durationMs }: { parsed: ParsedReceipt; dura
       </p>
     </div>
   )
+}
+
+function formatScanDisagreement(disagreement: ReceiptScanDisagreement): string {
+  const label = disagreement.field[0].toUpperCase() + disagreement.field.slice(1)
+  const values = disagreement.values.map((value) => {
+    if (disagreement.field === 'amount') return `৳${value}`
+    if (disagreement.field === 'date') return formatIsoDate(value as IsoDate)
+    return `“${value}”`
+  })
+  return `${label}: ${values.join(' or ')}.`
+}
+
+function describeOcrFailure(error: unknown): string {
+  if (error instanceof Error && error.name === 'TimeoutError') {
+    return 'The scan took too long and was stopped. Crop the photo around the receipt, then retry; you can also enter the expense manually.'
+  }
+  if (error instanceof Error && error.name === 'AbortError') {
+    return 'The scan was cancelled. Retry when ready, or enter the expense manually.'
+  }
+  return error instanceof Error
+    ? `The receipt could not be read (${error.message}). Retry, or enter the expense manually.`
+    : 'The receipt could not be read. Retry, or enter the expense manually.'
 }
 
 /** Records which extracted values the user corrected, for the expense note. */

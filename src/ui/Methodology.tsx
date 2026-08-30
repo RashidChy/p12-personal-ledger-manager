@@ -159,10 +159,12 @@ export function Methodology({
         </div>
         <ul className="small muted" style={{ paddingLeft: '1.1rem', margin: 0 }}>
           <li>OCR runs in the browser with Tesseract.js (Apache-2.0) compiled to WebAssembly, inside a web worker.</li>
+          <li>Large phone photos are decoded, resized to a safe working resolution and auto-deskewed locally. An uncertain first read triggers a contrast-enhanced second pass.</li>
           <li>The worker, WASM core and the English model are served from this app's own <code>/ocr/</code> directory - no CDN, no third-party request.</li>
           <li>Receipt images are held in memory as object URLs, are never uploaded, and are not stored after you leave the scanner.</li>
           <li>Only the values you confirm (date, merchant, amount, category) are saved, and only to this device's local storage.</li>
-          <li>The parser reports its confidence per field and shows every other monetary value it found, so a wrong pick is visible and correctable.</li>
+          <li>The parser reports confidence per field and shows alternative dates and monetary values. Disagreement between OCR passes stays visible, and a low-confidence or disputed scan cannot be saved until it is checked against the image.</li>
+          <li>Cancel stops the active recognition; a 75-second watchdog retires a stuck worker so Retry can start with a clean engine.</li>
         </ul>
       </section>
 
@@ -174,7 +176,7 @@ export function Methodology({
           <li>Salary, expenses and pockets are saved in this browser's localStorage under <code>plm.ledger</code>, versioned by schema.</li>
           <li>Older stored data is migrated on load; unreadable records are dropped individually and reported, never silently zeroed.</li>
           <li>A blob that cannot be parsed is left untouched and, when browser storage permits it, copied to a separate backup key. A failed write is surfaced instead of being swallowed.</li>
-          <li>“Reset to sample data” restores the official fixture case after a confirmation.</li>
+          <li><strong>Data &amp; demo → Restore sample</strong> restores an official fixture case after a confirmation.</li>
         </ul>
       </section>
     </div>

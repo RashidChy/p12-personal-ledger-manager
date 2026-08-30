@@ -12,7 +12,6 @@ and your data is stored on your own device.
 
 - **Live application:** https://rashidchy.github.io/lsh26-t008-p12/
 - **Repository:** https://github.com/RashidChy/lsh26-t008-p12
-- **Demo script:** [`DEMO.md`](DEMO.md) (60–90 seconds)
 - **Licences:** [`LICENSES.md`](LICENSES.md)
 
 > Judges should evaluate only the exact 40-character commit SHA entered in the Final Submission Form.
@@ -21,18 +20,18 @@ and your data is stored on your own device.
 
 | Requirement | Status | Where to verify |
 | --- | --- | --- |
-| **R1 — salary, expenses and receipt OCR** | Complete | **Expenses** sets salary and records expenses. **Receipt scanner** loads a photo, performs on-device OCR, shows merchant/date/amount and lets the user correct every field before saving. Source: `src/ui/Expenses.tsx`, `src/ui/ReceiptScanner.tsx`, `src/ocr/ocrEngine.ts`. |
+| **R1 — salary, expenses and receipt OCR** | Complete | **Expenses** sets salary and records expenses. **Receipt scanner** normalises a photo locally, performs adaptive on-device OCR, shows merchant/date/amount with alternatives, and lets the user correct every field before saving. Source: `src/ui/Expenses.tsx`, `src/ui/ReceiptScanner.tsx`, `src/ocr/ocrEngine.ts`. |
 | **R2 — monthly dashboard** | Complete | **Overview** shows spend against salary, category totals, largest expenses and prior-month change. Switch the selected month to recalculate it. Source: `src/ui/Overview.tsx`, `src/domain/ledger.ts`. |
 | **R3 — forecast and written insights** | Complete | **Forecast & insights** shows expected remaining spend, month-end balance/shortfall and amount-specific category and merchant observations. Source: `src/ui/ForecastView.tsx`, `src/domain/forecast.ts`, `src/domain/insights.ts`. |
 | **R4 — savings pockets and DPS** | Complete | **Savings pockets** creates named goals with item details, targets and monthly contributions, then shows forecast-based completion and a stated-rate DPS return and schedule. Source: `src/ui/SavingsView.tsx`, `src/domain/savings.ts`, `src/domain/dps.ts`. |
 
 ## Judge fixture workflow
 
-1. Open the live application and select **Import fixture JSON** in the top bar.
+1. Open **Data & demo** in the top bar and select **Import fixture data**.
 2. Choose either the complete P12 Submission Kit JSON file or one case object in the same shape (maximum 5 MB). The file is read and validated locally; it is never uploaded.
 3. For a multi-case file, choose the case to load. Review its forecast date, month, salary, expense/pocket counts and DPS rate.
 4. Tick the explicit replacement acknowledgement, then select **Replace with _case ID_**. The app opens the recalculated Overview for that case.
-5. To restore the bundled data, select **Reset to sample data**, choose PUB-01 through PUB-25 and confirm.
+5. To restore the bundled data, open **Data & demo → Restore sample**, choose PUB-01 through PUB-25 and confirm.
 
 Malformed JSON, a non-P12 fixture, invalid dates/amounts, duplicate IDs, unsupported file types and oversized files are rejected with field-specific messages before any existing ledger data is replaced. Source: `src/ui/FixtureImporter.tsx`, `src/data/fixtureImport.ts`; regression evidence: `src/test/fixtureImport.test.ts`.
 
@@ -63,9 +62,9 @@ Six sections:
 - Set and update a monthly salary, plus per-month salary overrides (for a bonus month, or a month with no income).
 - Add, edit and delete expenses; deletion always asks for confirmation and names what will be deleted.
 - Upload or drag-and-drop a receipt photograph; file type and size are validated before anything runs.
-- Real OCR (Tesseract.js/WebAssembly) extracts the text on your device; the parser then works out the merchant, date and total.
+- Real OCR (Tesseract.js/WebAssembly) normalises and bounds the image locally, then extracts its text on your device. An uncertain first read automatically triggers a grayscale/contrast-enhanced second pass, and the stronger parsed result is retained.
 - Image preview, live OCR progress, per-field confidence, and the reason each value was chosen.
-- Every extracted field is editable, the category can be corrected, other monetary values found on the receipt are offered as one-tap alternatives, and the receipt can be cancelled without saving.
+- Every extracted field is editable, the category can be corrected, alternative dates and monetary values are offered as one-tap choices, and the receipt can be cancelled without saving. A low-confidence scan requires explicit human confirmation before it can be stored.
 - Handles: unsupported file types, oversized files, empty files, OCR engine failure (retry / manual fallback), missing date, missing merchant, missing amount, multiple monetary values, and low-confidence extraction.
 
 **Requirement 2 — monthly dashboard**
@@ -113,7 +112,7 @@ src/
   ocr/        Tesseract.js wrapper (worker lifecycle, progress, file validation)
   store/      versioned localStorage persistence, migration, reducer/hook
   ui/         React components
-  test/       125 automated tests
+  test/       198 automated tests
 ```
 
 ## Problem-solving approach
@@ -136,7 +135,7 @@ the team can explain and verify every result.
 
 OpenAI Codex was used as a disclosed coding assistant for architecture, implementation,
 refactoring, test generation, code review and documentation. The team reviewed the
-source and verified the output with the 125-test suite, TypeScript, ESLint, production
+source and verified the output with the 198-test suite, TypeScript, ESLint, production
 builds and browser walkthroughs. AI output was not accepted as an authority for ledger,
 forecast or DPS results; those behaviours are encoded as deterministic functions and
 checked against the published fixture and stated formulas.
@@ -179,7 +178,7 @@ a domain root or in a sub-path.
 ## Tests
 
 ```bash
-npm test           # 125 tests, deterministic, no network
+npm test           # 198 tests, deterministic, no network
 npm run lint       # ESLint
 npm run typecheck  # TypeScript check with no emitted files
 ```
@@ -232,9 +231,9 @@ Fixture facts (submission-kit schema version 2.2, validated by `fixture.test.ts`
 - Expenses: `{ id, date, category, shop, amount_bdt }`; 41–61 per case, spread over exactly the two documented months.
 - Pockets: `{ id, name, item, target_bdt, monthly_contribution_bdt }`; 3 per case.
 - Amounts are fixed 2-decimal strings; categories are Groceries, Rent, Utilities, Education, Food, Transport, Health, Mobile, Entertainment, Clothing. These seed the app's category list, which the user can then edit.
-- The default demo case is **PUB-01** (salary ৳50,000, `today` = 2026-04-17, DPS 8.00%); any of the 25 cases can be loaded from the “Reset to sample data” dialog.
+- The default demo case is **PUB-01** (salary ৳50,000, `today` = 2026-04-17, DPS 8.00%); any of the 25 cases can be loaded through **Data & demo → Restore sample**.
 
-Judges can also load a complete published/hidden P12 fixture or a single same-shape case through **Import fixture JSON**. The importer validates the P12 identity and every required case, expense and pocket field, presents a case picker and factual review, and requires explicit confirmation before replacing local data.
+Judges can also load a complete published/hidden P12 fixture or a single same-shape case through **Data & demo → Import fixture data**. The importer validates the P12 identity and every required case, expense and pocket field, presents a case picker and factual review, and requires explicit confirmation before replacing local data.
 
 **Documented assumptions**
 
@@ -325,21 +324,22 @@ to the paisa.
 
 1. Choose or drop an image (JPEG, PNG, WebP, BMP; max 10 MB).
 2. The file type, size and emptiness are validated with a specific, actionable message.
-3. The image preview is shown immediately.
+3. The image preview is shown immediately. The browser applies phone-photo orientation, bounds oversized images, and upscales very small captures locally.
 4. OCR progress is displayed live (engine load → model load → recognition), with a cancel button.
-5. Tesseract.js extracts the text on the device.
+5. Tesseract.js extracts the text on the device. If the standard read is incomplete or uncertain, the scanner automatically tries a grayscale/auto-contrast enhanced pass and keeps the stronger parsed result. A 75-second recognition watchdog retires a stuck worker so Retry can start cleanly.
 6. The parser finds the merchant, date and total:
    - **Amount** — lines are scored: `GRAND TOTAL` / `NET PAYABLE` / `AMOUNT DUE` score highest; `SUB TOTAL`, `VAT`, `CHANGE`, `CASH`, `DISCOUNT` are penalised; with no labelled total the largest currency-marked value is used at low confidence. Dates, times, phone/invoice numbers and item sizes (`100g`, `5kg`, `10s`) are masked out first, and common OCR digit confusions (`O→0`, `l→1`, `S→5`) are repaired inside numeric tokens only.
-   - **Date** — ISO, `dd/mm/yyyy`, `dd-mm-yy`, `17 Apr 2026` and `Apr 17, 2026` are all read. Ambiguous day/month order assumes the Bangladeshi day-first convention and lowers confidence. Dates after the forecast date are flagged.
+   - **Date** — ISO, `dd/mm/yyyy`, `dd-mm-yy`, `17 Apr 2026` and `Apr 17, 2026` are all read. Ambiguous day/month order assumes the Bangladeshi day-first convention and lowers confidence. Invoice/transaction labels outrank due, expiry and manufacturing dates; dates after the scan date are flagged.
    - **Merchant** — matched against known merchant names, otherwise inferred from the receipt header while skipping invoice/VAT/phone/address lines.
    - **Category** — suggested from merchant keywords (e.g. Uber → Transport, DESCO → Utilities, Lazz Pharma → Health).
 7. Each field shows a confidence percentage and the reason it was chosen; anything below 70% is flagged “check”.
-8. Every field is editable, and every other monetary value found on the receipt is offered as a one-tap alternative.
-9. Nothing is stored until “Save expense” is pressed. Cancelling discards everything.
+8. Every field is editable, and alternative dates and monetary values found on the receipt are offered as one-tap choices with their source text.
+9. If two OCR passes disagree, both values remain visible and that field is forced into review rather than silently choosing one.
+10. Nothing is stored until “Save expense” is pressed. If any extracted field is uncertain, the user must explicitly confirm that they checked the image first. Cancelling aborts the active scan and discards everything.
 
 Failure paths: unsupported/oversized/empty file, engine load failure, no text recognised,
-missing merchant/date/amount, several plausible totals, and low confidence — each with a
-retry and a manual-entry fallback.
+missing merchant/date/amount, several plausible totals, cross-pass disagreement, timeout,
+and low confidence — each with a retry and a manual-entry fallback.
 
 ## Local privacy behaviour
 
