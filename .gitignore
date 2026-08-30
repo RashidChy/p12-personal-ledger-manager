@@ -11,3 +11,5 @@ coverage/
 # (regenerated deterministically by `npm run setup:ocr`, which runs on predev/prebuild)
 public/ocr/worker.min.js
 public/ocr/core/
+tsconfig.tsbuildinfo
+*.tsbuildinfo
