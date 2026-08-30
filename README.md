@@ -2,7 +2,7 @@
 
 **LofiStack Hackathon 2026 · Team BinaryBros (LSH26-T008) · Problem P12**
 
-A private, offline-capable personal finance ledger for Bangladeshi taka: set a monthly
+A privacy-first, statically hosted personal finance ledger for Bangladeshi taka: set a monthly
 salary, record expenses, scan a paper receipt with **on-device OCR**, and see a monthly
 dashboard, a transparent month-end forecast, amount-specific written insights, and
 savings pockets with a DPS maturity projection.
@@ -10,10 +10,31 @@ savings pockets with a DPS maturity projection.
 Nothing is uploaded. Receipt photos, OCR and every calculation happen in your browser,
 and your data is stored on your own device.
 
-- **Live demo:** _see “Deployment” below_
-- **Repository:** _see “Deployment” below_
+- **Live application:** https://rashidchy.github.io/lsh26-t008-p12/
+- **Repository:** https://github.com/RashidChy/lsh26-t008-p12
 - **Demo script:** [`DEMO.md`](DEMO.md) (60–90 seconds)
 - **Licences:** [`LICENSES.md`](LICENSES.md)
+
+> Judges should evaluate only the exact 40-character commit SHA entered in the Final Submission Form.
+
+## Requirement verification
+
+| Requirement | Status | Where to verify |
+| --- | --- | --- |
+| **R1 — salary, expenses and receipt OCR** | Complete | **Expenses** sets salary and records expenses. **Receipt scanner** loads a photo, performs on-device OCR, shows merchant/date/amount and lets the user correct every field before saving. Source: `src/ui/Expenses.tsx`, `src/ui/ReceiptScanner.tsx`, `src/ocr/ocrEngine.ts`. |
+| **R2 — monthly dashboard** | Complete | **Overview** shows spend against salary, category totals, largest expenses and prior-month change. Switch the selected month to recalculate it. Source: `src/ui/Overview.tsx`, `src/domain/ledger.ts`. |
+| **R3 — forecast and written insights** | Complete | **Forecast & insights** shows expected remaining spend, month-end balance/shortfall and amount-specific category and merchant observations. Source: `src/ui/ForecastView.tsx`, `src/domain/forecast.ts`, `src/domain/insights.ts`. |
+| **R4 — savings pockets and DPS** | Complete | **Savings pockets** creates named goals with item details, targets and monthly contributions, then shows forecast-based completion and a stated-rate DPS return and schedule. Source: `src/ui/SavingsView.tsx`, `src/domain/savings.ts`, `src/domain/dps.ts`. |
+
+## Judge fixture workflow
+
+1. Open the live application and select **Import fixture JSON** in the top bar.
+2. Choose either the complete P12 Submission Kit JSON file or one case object in the same shape (maximum 5 MB). The file is read and validated locally; it is never uploaded.
+3. For a multi-case file, choose the case to load. Review its forecast date, month, salary, expense/pocket counts and DPS rate.
+4. Tick the explicit replacement acknowledgement, then select **Replace with _case ID_**. The app opens the recalculated Overview for that case.
+5. To restore the bundled data, select **Reset to sample data**, choose PUB-01 through PUB-25 and confirm.
+
+Malformed JSON, a non-P12 fixture, invalid dates/amounts, duplicate IDs, unsupported file types and oversized files are rejected with field-specific messages before any existing ledger data is replaced. Source: `src/ui/FixtureImporter.tsx`, `src/data/fixtureImport.ts`; regression evidence: `src/test/fixtureImport.test.ts`.
 
 ---
 
@@ -72,7 +93,7 @@ Six sections:
 - Labelled form controls, visible focus rings, keyboard-operable tabs, dialogs with focus trapping and Escape-to-close, ARIA `meter` semantics on every bar, and a skip link.
 - No status is communicated by colour alone — every tone carries a text label and a glyph.
 - Clear loading, empty, error and retry states; inline validation; confirmation before deletion.
-- Search, category filter, period filter, month selection, and reset-to-sample-data with confirmation and fixture-case choice.
+- Search, category filter, period filter, month selection, reset-to-sample-data, and same-shape P12 JSON import with validation, review and explicit replacement confirmation.
 - Versioned device-local persistence with migration and per-record validation.
 
 ## Technology used
@@ -88,19 +109,54 @@ the DOM. The UI in `src/ui/` only renders what they return.
 ```
 src/
   domain/     money, dates, formatting, ledger, forecast, insights, savings, dps, receiptParse
-  data/       official fixture + loader/validator
+  data/       official fixture + loader + same-shape import validator
   ocr/        Tesseract.js wrapper (worker lifecycle, progress, file validation)
   store/      versioned localStorage persistence, migration, reducer/hook
   ui/         React components
-  test/       108 automated tests
+  test/       125 automated tests
 ```
+
+## Problem-solving approach
+
+We translated the four requirements into four visible workflows backed by small,
+deterministic domain modules. Money is represented as integer paisa, forecast and DPS
+assumptions stay visible to the user, and receipt OCR is a review-first input method—not
+an automatic write to the ledger. The official 25-case fixture drives the opening demo
+and automated boundary tests; the calculation layer is tested separately from React so
+the team can explain and verify every result.
+
+## Team contributions
+
+| Registered member | GitHub username | Major contribution | Evidence |
+| --- | --- | --- | --- |
+| Mohammed Nafiur Rashid Chowdhury | `rashidchy` | Team leadership, problem selection, work coordination and final-submission preparation | `EVENT.md`, `README.md`, `evaluation-manifest.json`, repository/deployment coordination |
+| Md Sayem Hossain | `sakib911` | Ledger, forecast, insights and savings/DPS engine; React interface; receipt-OCR workflow; automated tests and deployment implementation | `src/domain/`, `src/ui/`, `src/ocr/`, `src/test/`, `scripts/` |
+
+## AI usage
+
+OpenAI Codex was used as a disclosed coding assistant for architecture, implementation,
+refactoring, test generation, code review and documentation. The team reviewed the
+source and verified the output with the 125-test suite, TypeScript, ESLint, production
+builds and browser walkthroughs. AI output was not accepted as an authority for ledger,
+forecast or DPS results; those behaviours are encoded as deterministic functions and
+checked against the published fixture and stated formulas.
+
+## Major design decisions
+
+- **Integer-paisa arithmetic:** ledger totals avoid floating-point drift.
+- **Explainable forecasting:** a visible daily-run-rate model is easier for judges and users to audit than an opaque prediction.
+- **Review before save:** OCR proposes merchant, date and amount with confidence, while the user retains control of every stored field.
+- **On-device OCR and local persistence:** no receipt or personal ledger data is sent to a server.
+- **Static React application:** the problem needs no shared account or server database, so GitHub Pages is sufficient and removes backend failure modes.
 
 ## Install and run
 
 Requires Node.js 20+.
 
 ```bash
-npm install        # installs dependencies
+git clone https://github.com/RashidChy/lsh26-t008-p12.git
+cd lsh26-t008-p12
+npm ci             # installs the locked dependency tree
 npm run dev        # http://localhost:5173
 ```
 
@@ -123,9 +179,9 @@ a domain root or in a sub-path.
 ## Tests
 
 ```bash
-npm test           # 108 tests, deterministic, no network
+npm test           # 125 tests, deterministic, no network
 npm run lint       # ESLint
-npx tsc -p tsconfig.json --noEmit    # type check
+npm run typecheck  # TypeScript check with no emitted files
 ```
 
 Coverage of the required areas:
@@ -151,6 +207,7 @@ Coverage of the required areas:
 | 17 | Receipt text with multiple monetary values | `receiptParse.test.ts`, `ocrPipeline.test.ts` |
 | 18 | Month and year boundaries | `dates.test.ts`, `forecast.test.ts`, `savings.test.ts` |
 | 19 | Local data migration and validation | `storage.test.ts` |
+| 20 | Complete-fixture and single-case JSON import, validation and file guards | `fixtureImport.test.ts` |
 
 `ocrPipeline.test.ts` parses **real Tesseract output** captured from the committed sample
 receipt images (`src/test/ocrSamples.ts`), so the parser is tested against text an OCR
@@ -166,16 +223,18 @@ https://live.hackathon.lofistack.com/api/fixtures/P12?teamId=LSH26-T008
 Fetched during development and stored **unmodified** at:
 
 - `public/data/fixtures/P12.json` — the documented public copy
-- `src/data/P12.fixture.json` — byte-identical copy that is bundled, so the demo works
-  offline and browser CORS can never break the opening screen
+- `src/data/P12.fixture.json` — byte-identical bundled copy, so the opening screen does
+  not depend on the fixture endpoint or browser CORS
 
-Fixture facts (schema version 2.1, validated by `fixture.test.ts` over all 25 public cases):
+Fixture facts (submission-kit schema version 2.2, validated by `fixture.test.ts` over all 25 public cases):
 
 - Each case has `case_id`, `today`, `months {last, this}`, `salary_bdt`, `expenses[]`, `pockets[]`, `dps_annual_rate_percent`, `dps_rule`.
 - Expenses: `{ id, date, category, shop, amount_bdt }`; 41–61 per case, spread over exactly the two documented months.
 - Pockets: `{ id, name, item, target_bdt, monthly_contribution_bdt }`; 3 per case.
 - Amounts are fixed 2-decimal strings; categories are Groceries, Rent, Utilities, Education, Food, Transport, Health, Mobile, Entertainment, Clothing.
 - The default demo case is **PUB-01** (salary ৳50,000, `today` = 2026-04-17, DPS 8.00%); any of the 25 cases can be loaded from the “Reset to sample data” dialog.
+
+Judges can also load a complete published/hidden P12 fixture or a single same-shape case through **Import fixture JSON**. The importer validates the P12 identity and every required case, expense and pocket field, presents a case picker and factual review, and requires explicit confirmation before replacing local data.
 
 **Documented assumptions**
 
@@ -284,9 +343,9 @@ retry and a manual-entry fallback.
 ## Local privacy behaviour
 
 - The receipt image is held in memory as an object URL and is **never uploaded**; it is released as soon as the scanner is closed.
-- OCR runs in a web worker in your browser. The worker script, the WASM core and the English model are served from this app's own `/ocr/` directory — there is **no CDN request and no third-party request** at any point. The scanner works with the network disconnected.
+- OCR runs in a web worker in your browser. The worker script, the WASM core and the English model are served from this app's own `/ocr/` directory — there is **no CDN or third-party request**. A scan already opened in a loaded session can continue without a network connection; the app does not install a service worker for cold offline reloads.
 - Only the values you confirm are saved, and only to this browser's `localStorage` (`plm.ledger`).
-- The stored blob is versioned and validated on load: older schemas are migrated, individually unreadable records are dropped and reported, and a blob that cannot be parsed is copied to a backup key before anything else happens. A failed write (quota, private mode) is surfaced as a visible warning — a storage failure never silently destroys data.
+- The stored blob is versioned and validated on load: older schemas are migrated and individually unreadable records are dropped and reported. A blob that cannot be parsed is left untouched and copied to a separate backup key when browser storage permits it. A failed write (quota, private mode) is surfaced as a visible warning — a storage failure never silently destroys data.
 - No analytics, no telemetry, no cookies, no accounts, no backend.
 
 ## What is illustrative or mocked
@@ -303,8 +362,11 @@ retry and a manual-entry fallback.
 - The parser is tuned for Bangladeshi retail/restaurant receipt layouts; unusual layouts may need a manual correction (which the review step is designed for).
 - The forecast assumes a flat daily pace, so a month with one large scheduled bill early on will project high until later days average it down.
 - Data lives in one browser profile on one device; there is no sync, export or backup file yet.
+- There is no service worker, so opening or reloading the application while fully offline is not guaranteed even though OCR uses only same-origin assets.
 - The DPS projection assumes the effective contribution stays constant for the whole period and ignores tax, fees, missed instalments and early withdrawal.
-- The first scan downloads nothing but does load ~2 MB of local model data into memory, so it takes a few seconds longer than later scans.
+- Each pocket is an independent what-if projection against the same disposable forecast; the app does not allocate that balance across several pockets as a combined savings plan.
+- Completion and DPS schedules are capped at 600 months (50 years). Longer scenarios show the minimum contribution needed for a bounded forecast instead of generating an unsafe schedule.
+- The first scan fetches the same-origin OCR model and core (about 2 MB) into memory, so it takes a few seconds longer than later scans; no third-party service receives the image.
 
 ## What would be built next
 
@@ -317,14 +379,14 @@ retry and a manual-entry fallback.
 
 ## Deployment
 
-- **Live URL:** https://rashidchy.github.io/p12-personal-ledger-manager/
-- **Repository:** https://github.com/RashidChy/p12-personal-ledger-manager
+- **Live URL:** https://rashidchy.github.io/lsh26-t008-p12/
+- **Repository:** https://github.com/RashidChy/lsh26-t008-p12
 - **Host:** GitHub Pages (static, public, no login or setup required).
 
 Redeploy after a change:
 
 ```bash
-npm run deploy:pages     # builds, then force-pushes dist/ to the gh-pages branch
+npm run deploy:pages     # builds, then adds a normal commit to the gh-pages branch
 ```
 
 To deploy the same build anywhere else (Netlify, Vercel, Cloudflare Pages, any static host):
@@ -335,7 +397,7 @@ npm run build
 # then publish the contents of dist/
 ```
 
-The `dist/` output is ~15 MB, almost entirely the Tesseract WASM core and the English
+The `dist/` output is ~28 MB, almost entirely the Tesseract WASM core variants and the English
 OCR model. That is the price of keeping OCR on-device with no third-party CDN request;
 the initial page load itself is ~94 KB gzipped, and the OCR assets are fetched only when
 a receipt is actually scanned.
@@ -343,7 +405,8 @@ a receipt is actually scanned.
 ## Licensing
 
 Every dependency, asset and data file is listed in [`LICENSES.md`](LICENSES.md) with its
-licence and source. The installed tree was audited package by package: 272 packages, all
+licence and source. The lockfile was audited package by package: 320 package records (the
+root project excluded), all
 permissive (MIT, Apache-2.0, ISC, BSD, MIT-0, Python-2.0, BlueOak-1.0.0, CC-BY-4.0), and
 **zero** GPL/AGPL/LGPL/MPL/SSPL/non-commercial licences. Tesseract.js was verified as
 Apache-2.0 before it was installed, as the problem statement requires.

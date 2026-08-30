@@ -145,7 +145,10 @@ export function buildInsights(params: {
         id: 'suggested-cut',
         tone: 'warning',
         label: 'Suggested action',
-        text: `Reducing ${cut.category} by ${formatTakaFromFloatPaisa(cut.amountPaisa)} this month would bring the forecast back within salary (${cut.category} is currently ${formatTaka(cut.currentPaisa)}).`,
+        text:
+          cut.remainingShortfallPaisa <= 0
+            ? `Reducing ${cut.category} by ${formatTakaFromFloatPaisa(cut.amountPaisa)} this month would bring the forecast back within salary (${cut.category} is currently ${formatTaka(cut.currentPaisa)}).`
+            : `Reducing ${cut.category} by ${formatTakaFromFloatPaisa(cut.amountPaisa)} would lower the projected shortfall from ${formatTakaFromFloatPaisa(forecast.forecastShortfallPaisa)} to ${formatTakaFromFloatPaisa(cut.remainingShortfallPaisa)}, but additional savings would still be needed.`,
       })
     }
   }
@@ -225,13 +228,23 @@ export function biggestCategoryMovement(
 export function suggestCut(
   summary: MonthlySummary,
   shortfallPaisa: number,
-): { category: Category; amountPaisa: number; currentPaisa: Paisa } | null {
+): { category: Category; amountPaisa: number; currentPaisa: Paisa; remainingShortfallPaisa: number } | null {
   const candidates = summary.categories.filter((c) => DISCRETIONARY.includes(c.category))
   const affordable = candidates.find((c) => c.amountPaisa >= shortfallPaisa)
   if (affordable) {
-    return { category: affordable.category, amountPaisa: shortfallPaisa, currentPaisa: affordable.amountPaisa }
+    return {
+      category: affordable.category,
+      amountPaisa: shortfallPaisa,
+      currentPaisa: affordable.amountPaisa,
+      remainingShortfallPaisa: 0,
+    }
   }
   const biggest = candidates[0]
   if (!biggest) return null
-  return { category: biggest.category, amountPaisa: biggest.amountPaisa, currentPaisa: biggest.amountPaisa }
+  return {
+    category: biggest.category,
+    amountPaisa: biggest.amountPaisa,
+    currentPaisa: biggest.amountPaisa,
+    remainingShortfallPaisa: Math.max(0, shortfallPaisa - biggest.amountPaisa),
+  }
 }

@@ -56,6 +56,11 @@ export function ReceiptScanner({
   const [durationMs, setDurationMs] = useState<number | null>(null)
   const lastFile = useRef<File | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Every scan owns a monotonically increasing token. Resetting, cancelling or
+  // starting another scan invalidates the old token, so a late worker result can
+  // never reopen the review form after the user has left the scan.
+  const ocrRunId = useRef(0)
+  const activeOcrRuns = useRef(0)
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -63,11 +68,17 @@ export function ReceiptScanner({
 
   // Release the OCR worker (and its WASM memory) when the scanner unmounts.
   useEffect(() => () => {
-    void terminateOcr()
+    ocrRunId.current += 1
+    // Tesseract logs an internal worker error if it is terminated in the middle
+    // of recognize(). A stale in-flight run cleans up safely in its finally
+    // block; an idle worker can be released immediately.
+    if (activeOcrRuns.current === 0) void terminateOcr()
   }, [])
 
   const reset = useCallback(
     (keepMessage = false) => {
+      ocrRunId.current += 1
+      if (activeOcrRuns.current === 0) void terminateOcr()
       setPhase('idle')
       setParsed(null)
       setDraft(null)
@@ -91,12 +102,17 @@ export function ReceiptScanner({
 
   const runOcr = useCallback(
     async (file: File) => {
+      const runId = ++ocrRunId.current
+      activeOcrRuns.current += 1
       setPhase('scanning')
       setOcrError(null)
       setSaved(null)
       setProgress({ status: 'starting', progress: 0, label: 'Starting the on-device OCR engine' })
       try {
-        const result = await recognizeReceipt(file, (p) => setProgress(p))
+        const result = await recognizeReceipt(file, (p) => {
+          if (ocrRunId.current === runId) setProgress(p)
+        })
+        if (ocrRunId.current !== runId) return
         setRawText(result.text)
         setEngineConfidence(result.confidence)
         setDurationMs(result.durationMs)
@@ -110,12 +126,21 @@ export function ReceiptScanner({
         })
         setPhase('review')
       } catch (error) {
+        // Cancellation terminates the worker, which rejects the pending OCR
+        // promise. A stale run is intentional and must not show an error or
+        // transition back into the scanner.
+        if (ocrRunId.current !== runId) return
         setOcrError(
           error instanceof Error
             ? `The receipt could not be read (${error.message}). This can happen if the OCR engine failed to load. Retry, or enter the expense manually.`
             : 'The receipt could not be read. Retry, or enter the expense manually.',
         )
         setPhase('failed')
+      } finally {
+        activeOcrRuns.current -= 1
+        // If this generation was cancelled and no newer scan is using the
+        // shared worker, release it after recognition has settled cleanly.
+        if (ocrRunId.current !== runId && activeOcrRuns.current === 0) void terminateOcr()
       }
     },
     [referenceDate],
@@ -190,7 +215,8 @@ export function ReceiptScanner({
       <Notice tone="positive" title="Private by design.">
         The photo stays on this device. Text recognition runs in your browser with Tesseract.js (WebAssembly); the
         engine and English model are served from this app itself. No image, and no extracted text, is uploaded
-        anywhere - you can disconnect from the network and the scanner still works.
+        anywhere. The browser may need the network to fetch those same-origin OCR assets when a scan starts, but the
+        receipt itself is processed locally and is never sent with that request.
       </Notice>
 
       {saved ? (

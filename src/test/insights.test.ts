@@ -59,11 +59,12 @@ describe('insights', () => {
     expect(overspend!.tone).toBe('critical')
   })
 
-  it('suggests a specific category cut that closes the projected shortfall', () => {
+  it('suggests a specific category cut without overstating what it can achieve', () => {
     const cut = build().find((i) => i.id === 'suggested-cut')
     expect(cut).toBeDefined()
     expect(cut!.text).toMatch(/Reducing (Food|Entertainment|Transport)/)
     expect(cut!.text).toMatch(/৳[\d,]+/)
+    expect(cut!.text).toContain('additional savings would still be needed')
   })
 
   it('names the largest single expense with merchant, category and date', () => {
@@ -130,6 +131,7 @@ describe('insight building blocks', () => {
     const cut = suggestCut(summary, taka('999999.00'))
     expect(cut).not.toBeNull()
     expect(cut!.amountPaisa).toBe(cut!.currentPaisa)
+    expect(cut!.remainingShortfallPaisa).toBeGreaterThan(0)
   })
 
   it('returns no suggestion when there is no discretionary spending to cut', () => {

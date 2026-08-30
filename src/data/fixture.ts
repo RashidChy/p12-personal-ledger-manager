@@ -6,7 +6,7 @@
  * here from src/data/P12.fixture.json, byte-identical) so the demo is
  * reproducible offline and browser CORS can never break the opening screen.
  *
- * Fixture shape (schema_version 2.1), validated against all 25 public cases:
+ * Fixture shape (schema_version 2.2), validated against all 25 public cases:
  *   case_id, today, months {last, this}, salary_bdt,
  *   expenses[] { id, date, category, shop, amount_bdt },
  *   pockets[]  { id, name, item, target_bdt, monthly_contribution_bdt },

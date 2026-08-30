@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { projectDps } from '../domain/dps'
+import { MAX_DPS_PROJECTION_MONTHS, projectDps } from '../domain/dps'
 import { projectPocket } from '../domain/savings'
 import { taka } from './helpers'
 import type { Pocket } from '../domain/types'
+import { validatePocketDraft } from '../ui/SavingsView'
 
 function pocket(partial: Partial<Pocket> = {}): Pocket {
   return {
@@ -112,6 +113,21 @@ describe('unaffordable pocket', () => {
     expect(p.status).toBe('no-planned-contribution')
     expect(p.monthsToCompletion).toBeNull()
   })
+
+  it('refuses a multi-million-row projection caused by a tiny contribution', () => {
+    const p = projectPocket({
+      pocket: pocket({ targetPaisa: taka('145000.00'), monthlyContributionPaisa: 1 }),
+      forecastMonthEndBalancePaisa: 1,
+      startMonth: '2026-04',
+      dpsAnnualRatePercent: 8,
+    })
+    expect(p.status).toBe('projection-too-long')
+    expect(p.monthsToCompletion).toBeNull()
+    expect(p.completionMonth).toBeNull()
+    expect(p.dps).toBeNull()
+    expect(p.explanation).toContain(`${MAX_DPS_PROJECTION_MONTHS} months (50 years)`)
+    expect(p.explanation).toContain('Increase the effective monthly contribution')
+  })
 })
 
 describe('pocket already at its target', () => {
@@ -216,5 +232,79 @@ describe('DPS compounding', () => {
     expect(p.dps?.annualRatePercent).toBe(9)
     expect(p.dps?.totalPrincipalPaisa).toBe(taka('60000.00'))
     expect(p.dps?.maturityValuePaisa).toBeGreaterThan(taka('60000.00'))
+  })
+
+  it('caps the schedule at 50 years before allocating rows', () => {
+    const atLimit = projectDps({
+      openingBalancePaisa: 0,
+      monthlyDepositPaisa: taka('100.00'),
+      months: MAX_DPS_PROJECTION_MONTHS,
+      annualRatePercent: 8,
+    })
+    expect(atLimit.schedule).toHaveLength(MAX_DPS_PROJECTION_MONTHS)
+
+    expect(() =>
+      projectDps({
+        openingBalancePaisa: 0,
+        monthlyDepositPaisa: 1,
+        months: MAX_DPS_PROJECTION_MONTHS + 1,
+        annualRatePercent: 8,
+      }),
+    ).toThrow(/limited to 600 months/)
+    expect(() =>
+      projectDps({
+        openingBalancePaisa: 0,
+        monthlyDepositPaisa: 1,
+        months: Number.POSITIVE_INFINITY,
+        annualRatePercent: 8,
+      }),
+    ).toThrow(/finite number/)
+  })
+
+  it('rejects unsafe money inputs and rates outside the stated UI range', () => {
+    expect(() =>
+      projectDps({
+        openingBalancePaisa: -1,
+        monthlyDepositPaisa: 100,
+        months: 1,
+        annualRatePercent: 8,
+      }),
+    ).toThrow(/opening balance/)
+    expect(() =>
+      projectDps({
+        openingBalancePaisa: 0,
+        monthlyDepositPaisa: Number.MAX_SAFE_INTEGER,
+        months: 2,
+        annualRatePercent: 0,
+      }),
+    ).toThrow(/safe supported money range/)
+    expect(() =>
+      projectDps({
+        openingBalancePaisa: 0,
+        monthlyDepositPaisa: 100,
+        months: 1,
+        annualRatePercent: 30.01,
+      }),
+    ).toThrow(/between 0% and 30%/)
+  })
+})
+
+describe('savings pocket form requirements', () => {
+  const validDraft = {
+    name: 'Laptop',
+    item: 'MacBook Air M4, 16 GB RAM',
+    target: '145000',
+    saved: '0',
+    contribution: '12000',
+  }
+
+  it('requires item details and a positive monthly contribution', () => {
+    expect(validatePocketDraft({ ...validDraft, item: '   ' }).item).toMatch(/Describe the item/)
+    expect(validatePocketDraft({ ...validDraft, contribution: '' }).contribution).toMatch(/Enter the planned/)
+    expect(validatePocketDraft({ ...validDraft, contribution: '0' }).contribution).toMatch(/greater than/)
+  })
+
+  it('accepts a complete pocket with a positive contribution', () => {
+    expect(validatePocketDraft(validDraft)).toEqual({})
   })
 })

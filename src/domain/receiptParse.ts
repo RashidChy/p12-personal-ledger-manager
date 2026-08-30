@@ -282,7 +282,7 @@ export function parseDate(
   }
 
   if (hits.length === 0) {
-    warnings.push('No date could be read from the receipt. The forecast date is used as a starting point - please correct it.')
+    warnings.push('No date could be read from the receipt. Enter the transaction date before saving.')
     return {
       field: {
         value: null,

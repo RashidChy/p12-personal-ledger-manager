@@ -1,0 +1,84 @@
+{
+  "team_id": "LSH26-T008",
+  "problem_id": "P12",
+  "repository_name": "lsh26-t008-p12",
+  "live_url": "https://rashidchy.github.io/lsh26-t008-p12/",
+  "demo_video_url_optional": "",
+  "event_start_code": "LSH26-8490-C900",
+  "repository_created_before_release": false,
+  "pre_event_materials": [],
+  "sample_data": {
+    "loads_published_fixture": true,
+    "method": "Select Import fixture JSON in the top bar and choose either the complete P12 Submission Kit fixture or one same-shape case object. The browser validates the file locally, offers a case selector for multi-case files, shows the forecast date, month, salary, record counts and DPS rate for review, and requires explicit confirmation before replacing the ledger. Source: src/ui/FixtureImporter.tsx and src/data/fixtureImport.ts; tests: src/test/fixtureImport.test.ts.",
+    "reset_instructions": "Open Reset to sample data, choose any bundled PUB-01 through PUB-25 case, and confirm. PUB-01 restores the default judging view. Imported files are never uploaded."
+  },
+  "problem_solving_method": "We mapped the four requirements to visible workflows backed by deterministic domain modules. Money is stored as integer paisa, forecast and DPS assumptions remain visible, receipt OCR requires user review before saving, and the published 25-case fixture plus focused unit tests verify the calculations independently of the React UI. A locally validated, review-before-replace JSON importer lets judges exercise complete P12 fixture envelopes or individual same-shape cases without changing source code.",
+  "requirements": {
+    "R1": {
+      "status": "complete",
+      "evidence": "Expenses and Receipt scanner: set salary, add expenses, upload a receipt, review/correct merchant, date and amount, then explicitly save. Source: src/ui/Expenses.tsx, src/ui/ReceiptScanner.tsx, src/ocr/ocrEngine.ts."
+    },
+    "R2": {
+      "status": "complete",
+      "evidence": "Overview: selected-month spend versus salary, category breakdown, largest expenses and previous-month amount/percentage change. Source: src/ui/Overview.tsx and src/domain/ledger.ts."
+    },
+    "R3": {
+      "status": "complete",
+      "evidence": "Forecast & insights: remaining-month spend, expected month-end balance or shortfall, and multiple insights naming actual categories, merchants and taka amounts. Source: src/ui/ForecastView.tsx, src/domain/forecast.ts and src/domain/insights.ts."
+    },
+    "R4": {
+      "status": "complete",
+      "evidence": "Savings pockets: name, item details, target and contribution inputs; forecast-based completion month; stated DPS rate, maturity, principal, interest and monthly schedule. Source: src/ui/SavingsView.tsx, src/domain/savings.ts and src/domain/dps.ts."
+    }
+  },
+  "team_members": [
+    {
+      "registered_name": "Mohammed Nafiur Rashid Chowdhury",
+      "github_username": "rashidchy",
+      "major_contribution": "Team leadership, problem selection, work coordination and final-submission preparation.",
+      "evidence_paths_or_commits": [
+        "EVENT.md",
+        "README.md",
+        "evaluation-manifest.json"
+      ]
+    },
+    {
+      "registered_name": "Md Sayem Hossain",
+      "github_username": "sakib911",
+      "major_contribution": "Ledger, forecast, insights and savings/DPS engine; React interface; receipt-OCR workflow; automated tests and deployment implementation.",
+      "evidence_paths_or_commits": [
+        "src/domain/",
+        "src/ui/",
+        "src/ocr/",
+        "src/test/",
+        "scripts/"
+      ]
+    }
+  ],
+  "major_design_decisions": [
+    "Represent money as integer paisa to avoid floating-point drift in ledger totals.",
+    "Use a visible daily-run-rate forecast so every projection is reproducible and explainable.",
+    "Treat OCR as a reviewed proposal and never save extracted fields without user confirmation.",
+    "Keep OCR assets and persistence in the browser so receipts and ledger data are not sent to a backend.",
+    "Use a static React deployment because P12 requires no shared accounts or server-side persistence.",
+    "Validate imported P12 fixture JSON field by field and show a factual review plus explicit replacement acknowledgement before changing local data."
+  ],
+  "known_limitations": [
+    "OCR is English-only and unusual receipt layouts may require manual correction.",
+    "Ledger data is local to one browser profile and has no cross-device sync or export yet.",
+    "The forecast assumes a flat daily spending pace and does not model scheduled bills or seasonality.",
+    "DPS values are illustrative and exclude tax, fees, missed instalments and early withdrawal.",
+    "Pockets are independent what-if projections against the same disposable forecast; the balance is not allocated across pockets as a combined plan.",
+    "Completion and DPS schedules are capped at 600 months (50 years); longer scenarios report the minimum contribution needed instead of generating a schedule.",
+    "There is no service worker, so a cold application load while fully offline is not guaranteed."
+  ],
+  "ai_tools_used": [
+    {
+      "tool": "OpenAI Codex",
+      "used_for": "Architecture, implementation, refactoring, test generation, code review and documentation.",
+      "how_output_was_verified": "The team reviewed the source and ran 125 automated tests, TypeScript checks, ESLint, production builds and browser walkthroughs; calculation behaviour was checked against the published fixture and stated formulas, including complete-fixture and single-case import tests."
+    }
+  ],
+  "licenses_file": "LICENSES.md",
+  "declaration": "The information above is complete and truthful to the best of the team's knowledge."
+}

@@ -15,7 +15,9 @@ const AMOUNT_RE = /^-?\d+(\.\d+)?$/
 export function parseTakaToPaisa(input: string | number): Paisa {
   if (typeof input === 'number') {
     if (!Number.isFinite(input)) throw new Error(`Invalid amount: ${input}`)
-    return roundHalfUp(input * 100)
+    const paisa = roundHalfUp(input * 100)
+    if (!Number.isSafeInteger(paisa)) throw new Error(`Amount is outside the safe supported range: ${input}`)
+    return paisa
   }
   const cleaned = input.trim().replace(/[,\s৳]/g, '').replace(/^(BDT|Tk\.?|TK\.?)/i, '')
   if (!AMOUNT_RE.test(cleaned)) throw new Error(`Invalid amount: ${JSON.stringify(input)}`)
@@ -26,7 +28,11 @@ export function parseTakaToPaisa(input: string | number): Paisa {
   const remainder = frac.slice(2)
   let paisa = Number(whole) * 100 + Number(paisaFrac)
   if (remainder.length > 0 && Number(remainder[0]) >= 5) paisa += 1
-  return negative ? -paisa : paisa
+  const signedPaisa = negative ? -paisa : paisa
+  if (!Number.isSafeInteger(signedPaisa)) {
+    throw new Error(`Amount is outside the safe supported range: ${JSON.stringify(input)}`)
+  }
+  return signedPaisa
 }
 
 /** Rounds half away from zero, the convention the fixture's DPS rule specifies. */
@@ -40,11 +46,15 @@ export function paisaToTaka(paisa: Paisa): number {
 
 export function sumPaisa(values: readonly Paisa[]): Paisa {
   let total = 0
-  for (const v of values) total += v
+  for (const value of values) {
+    if (!isValidPaisa(value)) throw new Error(`Invalid paisa value: ${value}`)
+    total += value
+    if (!Number.isSafeInteger(total)) throw new Error('Money total exceeds the safe supported range.')
+  }
   return total
 }
 
-/** True when the value is a whole, finite number of paisa. */
+/** True when the value is a whole number of paisa that JavaScript can represent exactly. */
 export function isValidPaisa(value: unknown): value is Paisa {
-  return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value)
+  return typeof value === 'number' && Number.isSafeInteger(value)
 }

@@ -371,6 +371,39 @@ button.small { min-height: 34px; padding: 5px 10px; font-size: 0.8rem; }
 .modal h2 { margin-bottom: 4px; }
 .modal-sub { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px; }
 
+/* ---------- fixture import ---------- */
+
+.import-review {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.import-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+.import-facts div { min-width: 0; }
+.import-facts dt { color: var(--text-dim); font-size: 0.74rem; }
+.import-facts dd { margin: 1px 0 0; font-size: 0.87rem; font-weight: 620; overflow-wrap: anywhere; }
+.import-problem-list { margin: 4px 0 0; padding-left: 1.1rem; max-height: 150px; overflow: auto; }
+.confirm-replacement {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 11px 12px;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: var(--radius-sm);
+  background: rgba(251, 191, 36, 0.09);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+.confirm-replacement input { width: auto; min-height: 0; margin: 4px 0 0; flex: none; }
+
 /* ---------- misc ---------- */
 
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 14px; }
@@ -401,6 +434,7 @@ details.method[open] > summary { margin-bottom: 8px; }
   .topbar-inner { padding: 10px 14px; }
   .kpi-value { font-size: 1.4rem; }
   .row { align-items: flex-start; }
+  .import-facts { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

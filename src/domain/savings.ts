@@ -14,7 +14,7 @@
 import { addMonths, monthLabel, type MonthKey } from './dates'
 import { roundHalfUp, type Paisa } from './money'
 import { formatTaka, formatTakaFromFloatPaisa } from './format'
-import { projectDps, type DpsProjection } from './dps'
+import { MAX_DPS_PROJECTION_MONTHS, projectDps, type DpsProjection } from './dps'
 import type { Pocket } from './types'
 
 export type PocketStatus =
@@ -24,6 +24,7 @@ export type PocketStatus =
   | 'unfundable'
   | 'forecast-unavailable'
   | 'no-planned-contribution'
+  | 'projection-too-long'
 
 export interface PocketProjection {
   pocket: Pocket
@@ -150,6 +151,23 @@ export function projectPocket(params: {
   }
 
   const monthsToCompletion = Math.ceil(remainingTargetPaisa / effective)
+
+  // A one-paisa contribution against a large target can otherwise create a
+  // multi-million-row schedule and lock the browser. Beyond 50 years we report
+  // the limitation and the minimum contribution needed for a bounded forecast.
+  if (!Number.isFinite(monthsToCompletion) || monthsToCompletion > MAX_DPS_PROJECTION_MONTHS) {
+    const minimumMonthlyPaisa = Math.ceil(remainingTargetPaisa / MAX_DPS_PROJECTION_MONTHS)
+    return {
+      ...base,
+      monthsToCompletion: null,
+      completionMonth: null,
+      completionLabel: null,
+      status: 'projection-too-long',
+      explanation: `At the effective ${formatTakaFromFloatPaisa(effective)} monthly contribution, this pocket would take more than ${MAX_DPS_PROJECTION_MONTHS} months (50 years). To keep the forecast useful and the month-by-month DPS schedule safe, no completion date or DPS return is generated beyond that limit. Increase the effective monthly contribution to at least ${formatTaka(minimumMonthlyPaisa)}, or lower the target.`,
+      dps: null,
+    }
+  }
+
   // Contributions start in the selected month, so a 3-month plan starting in
   // April completes in June (start month + months − 1).
   const completionMonth = addMonths(startMonth, monthsToCompletion - 1)

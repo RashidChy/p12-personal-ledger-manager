@@ -44,8 +44,8 @@ export function Methodology({
           </p>
           <p className="small muted">
             Fetched during development and committed unmodified at <code>public/data/fixtures/P12.json</code> (schema
-            version {fixture.schema_version}, {validation.caseCount} public cases). The app bundles that same file so the
-            demo works offline and browser CORS can never break the opening screen. The active demo case is{' '}
+            version {fixture.schema_version}, {validation.caseCount} public cases). The app bundles that same file, so
+            the opening screen never depends on the fixture endpoint or browser CORS after the app loads. The active demo case is{' '}
             <strong>{fixtureCaseId ?? 'none (your own data)'}</strong>.
           </p>
           <ul className="small muted" style={{ paddingLeft: '1.1rem', margin: 0 }}>
@@ -112,7 +112,9 @@ export function Methodology({
         </div>
         <p className="small muted" style={{ marginTop: 10 }}>
           Contributions are counted from the selected month, so a 3-month plan starting in April completes in June. When
-          the effective contribution is ৳0 no completion date is shown - the shortfall is explained instead.
+          the effective contribution is ৳0 no completion date is shown - the shortfall is explained instead. Each pocket
+          is an independent what-if projection against the same forecast balance; this screen does not allocate one shared
+          pool across multiple pockets.
         </p>
       </section>
 
@@ -171,7 +173,7 @@ export function Methodology({
         <ul className="small muted" style={{ paddingLeft: '1.1rem', margin: 0 }}>
           <li>Salary, expenses and pockets are saved in this browser's localStorage under <code>plm.ledger</code>, versioned by schema.</li>
           <li>Older stored data is migrated on load; unreadable records are dropped individually and reported, never silently zeroed.</li>
-          <li>A blob that cannot be parsed is copied to a backup key before anything else happens, and a failed write is surfaced instead of being swallowed.</li>
+          <li>A blob that cannot be parsed is left untouched and, when browser storage permits it, copied to a separate backup key. A failed write is surfaced instead of being swallowed.</li>
           <li>“Reset to sample data” restores the official fixture case after a confirmation.</li>
         </ul>
       </section>

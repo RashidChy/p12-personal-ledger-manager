@@ -3,9 +3,9 @@
  *
  * Salary, expenses and pockets live in localStorage on the user's own device;
  * nothing is sent anywhere. Writes are guarded so a quota error or a corrupt
- * blob surfaces as a visible warning instead of silently destroying data - a
- * blob that fails to parse is copied to a backup key before anything is
- * overwritten.
+ * blob surfaces as a visible warning instead of silently destroying data. A
+ * blob that fails to parse is left untouched and, when storage permits it,
+ * copied to a separate backup key.
  */
 import { validateLedgerState } from './validate'
 import type { LedgerState } from '../domain/types'
@@ -56,8 +56,10 @@ export function loadState(): LoadResult {
     parsed = JSON.parse(raw)
   } catch {
     const backupKey = `${BACKUP_KEY_PREFIX}${Date.now()}`
+    let backupCreated = false
     try {
       s.setItem(backupKey, raw)
+      backupCreated = true
     } catch {
       /* backup is best-effort; the original key is left untouched either way */
     }
@@ -65,7 +67,9 @@ export function loadState(): LoadResult {
       state: null,
       issues: [],
       hadStoredData: true,
-      error: `Saved data could not be read (it is not valid JSON). The unreadable copy was kept at "${backupKey}" and the app has started from the official sample data. Nothing was deleted.`,
+      error: backupCreated
+        ? `Saved data could not be read (it is not valid JSON). The unreadable copy was kept at "${backupKey}" and the app has started from the official sample data. Nothing was deleted.`
+        : 'Saved data could not be read (it is not valid JSON). The original stored value was left untouched, but the browser would not allow a separate backup copy. The app has started from the official sample data.',
     }
   }
 

@@ -15,7 +15,14 @@
  *
  * The rate is an illustrative assumption, not a quoted market product.
  */
-import { roundHalfUp, type Paisa } from './money'
+import { isValidPaisa, roundHalfUp, type Paisa } from './money'
+
+/**
+ * Hard safety limit for an item projection and its month-by-month DPS rows.
+ * Fifty years is far beyond a normal savings pocket while keeping malformed or
+ * tiny contributions from allocating millions of schedule entries in the UI.
+ */
+export const MAX_DPS_PROJECTION_MONTHS = 600
 
 export interface DpsMonthRow {
   month: number
@@ -51,7 +58,25 @@ export function projectDps(params: {
   annualRatePercent: number
 }): DpsProjection {
   const { openingBalancePaisa, monthlyDepositPaisa, annualRatePercent } = params
-  const months = Math.max(0, Math.floor(params.months))
+  if (!isValidPaisa(openingBalancePaisa) || openingBalancePaisa < 0) {
+    throw new RangeError('DPS opening balance must be a non-negative, safe whole number of paisa.')
+  }
+  if (!isValidPaisa(monthlyDepositPaisa) || monthlyDepositPaisa < 0) {
+    throw new RangeError('DPS monthly deposit must be a non-negative, safe whole number of paisa.')
+  }
+  if (!Number.isFinite(annualRatePercent) || annualRatePercent < 0 || annualRatePercent > 30) {
+    throw new RangeError('DPS annual rate must be between 0% and 30%.')
+  }
+  const requestedMonths = Math.floor(params.months)
+  if (!Number.isFinite(requestedMonths)) {
+    throw new RangeError('DPS projection months must be a finite number.')
+  }
+  const months = Math.max(0, requestedMonths)
+  if (months > MAX_DPS_PROJECTION_MONTHS) {
+    throw new RangeError(
+      `DPS projections are limited to ${MAX_DPS_PROJECTION_MONTHS} months (50 years).`,
+    )
+  }
   const monthlyRatePercent = annualRatePercent / 12
 
   let balance = openingBalancePaisa
@@ -59,8 +84,14 @@ export function projectDps(params: {
   for (let m = 1; m <= months; m += 1) {
     const opening = balance
     balance += monthlyDepositPaisa
+    if (!Number.isSafeInteger(balance)) {
+      throw new RangeError('DPS balance exceeds the safe supported money range.')
+    }
     const interest = roundHalfUp((balance * annualRatePercent) / 12 / 100)
     balance += interest
+    if (!Number.isSafeInteger(interest) || !Number.isSafeInteger(balance)) {
+      throw new RangeError('DPS balance exceeds the safe supported money range.')
+    }
     schedule.push({
       month: m,
       openingPaisa: opening,
@@ -72,6 +103,9 @@ export function projectDps(params: {
 
   const totalDepositsPaisa = monthlyDepositPaisa * months
   const totalPrincipalPaisa = openingBalancePaisa + totalDepositsPaisa
+  if (!Number.isSafeInteger(totalDepositsPaisa) || !Number.isSafeInteger(totalPrincipalPaisa)) {
+    throw new RangeError('DPS principal exceeds the safe supported money range.')
+  }
   return {
     months,
     annualRatePercent,

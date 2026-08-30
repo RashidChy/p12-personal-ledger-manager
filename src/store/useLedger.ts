@@ -110,7 +110,8 @@ const initial = (): { state: LedgerState; status: StorageStatus } => {
 }
 
 export function useLedger() {
-  const bootstrap = useRef(initial())
+  const bootstrap = useRef<ReturnType<typeof initial> | null>(null)
+  if (bootstrap.current === null) bootstrap.current = initial()
   const [state, dispatch] = useReducer(reducer, bootstrap.current.state)
   const [status, setStatus] = useState<StorageStatus>(bootstrap.current.status)
   const firstRender = useRef(true)

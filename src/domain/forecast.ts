@@ -75,14 +75,20 @@ export function forecastMonth(
   month: MonthKey,
   referenceDate: IsoDate,
 ): ForecastResult {
-  const monthExpenses: Expense[] = expensesForMonth(state.expenses, month)
-  const spentToDatePaisa = totalSpent(monthExpenses)
+  const monthIsOver = compareMonths(monthOf(referenceDate), month) > 0
+  const monthNotStarted = compareMonths(monthOf(referenceDate), month) < 0
+  const recordedMonthExpenses: Expense[] = expensesForMonth(state.expenses, month)
+  // A receipt can be entered ahead of its transaction date. It belongs in the
+  // ledger, but not in an "as of" run rate until that date arrives. Completed
+  // months deliberately use every recorded expense as their final actual total.
+  const expensesToDate = monthIsOver
+    ? recordedMonthExpenses
+    : recordedMonthExpenses.filter((expense) => expense.date <= referenceDate)
+  const spentToDatePaisa = totalSpent(expensesToDate)
   const salaryPaisa = salaryForMonth(state, month)
   const totalDays = daysInMonth(month)
   const elapsedDays = elapsedDaysInMonth(month, referenceDate)
   const remainingDays = totalDays - elapsedDays
-  const monthIsOver = compareMonths(monthOf(referenceDate), month) > 0
-  const monthNotStarted = compareMonths(monthOf(referenceDate), month) < 0
 
   const base = {
     month,
@@ -137,8 +143,8 @@ export function forecastMonth(
       forecastShortfallPaisa: null,
       projectedOverspend: false,
       insufficientDataReason:
-        monthExpenses.length === 0
-          ? `No expenses are recorded for ${month} yet, so a run rate cannot be calculated. Add an expense (or scan a receipt) to see a forecast.`
+        expensesToDate.length === 0
+          ? `No expenses are recorded on or before ${referenceDate} for ${month}, so a run rate cannot be calculated. Add an expense (or scan a receipt) to see a forecast.`
           : `Recorded expenses for ${month} total ৳0, so a meaningful run rate cannot be calculated.`,
     }
   }
@@ -178,6 +184,7 @@ function buildAssumptions(month: MonthKey, referenceDate: IsoDate, monthIsOver: 
   }
   return [
     `Forecast date ("as of"): ${referenceDate}. Elapsed days include the forecast date itself.`,
+    `Only expenses dated on or before ${referenceDate} are included in spending to date.`,
     'Daily run rate = spending to date ÷ elapsed days.',
     'Expected additional spending = daily run rate × remaining days.',
     'Expected month-end spending = spending to date + expected additional spending.',

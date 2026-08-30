@@ -9,7 +9,7 @@ import type { LedgerAction } from '../store/useLedger'
 import { newId } from '../store/useLedger'
 import { Badge, ConfirmDialog, EmptyState, Meter, Method, Modal, Notice } from './common'
 
-interface PocketDraft {
+export interface PocketDraft {
   name: string
   item: string
   target: string
@@ -44,7 +44,8 @@ export function SavingsView({
             <h2>Savings pockets</h2>
             <p className="small muted" style={{ maxWidth: '70ch' }}>
               Each pocket is checked against the forecast for {monthLabel(month)}: the effective contribution is the
-              smaller of what you planned and what the forecast leaves disposable.
+              smaller of what you planned and what the forecast leaves disposable. Pockets are independent what-if
+              projections; the same disposable balance is not divided between them.
             </p>
           </div>
           <div className="form-actions" style={{ marginTop: 0 }}>
@@ -65,11 +66,11 @@ export function SavingsView({
               value={dpsAnnualRatePercent}
               onChange={(e) => {
                 const value = Number(e.target.value)
-                if (Number.isFinite(value) && value >= 0) onChangeRate(value)
+                if (Number.isFinite(value) && value >= 0 && value <= 30) onChangeRate(value)
               }}
             />
             <span className="hint">
-              Seeded from the official fixture. Illustrative only - not a quoted product or financial advice.
+              0%–30%. Seeded from the official fixture. Illustrative only - not a quoted product or financial advice.
             </span>
           </div>
         </div>
@@ -156,7 +157,7 @@ function PocketCard({
   const tone =
     p.status === 'fully-funded' || p.status === 'target-reached'
       ? 'positive'
-      : p.status === 'partially-funded'
+      : p.status === 'partially-funded' || p.status === 'projection-too-long'
         ? 'warning'
         : 'critical'
   const statusLabel = {
@@ -166,6 +167,7 @@ function PocketCard({
     unfundable: 'Forecast cannot fund this pocket',
     'forecast-unavailable': 'Forecast unavailable',
     'no-planned-contribution': 'No contribution planned',
+    'projection-too-long': 'Projection exceeds 50-year limit',
   }[p.status]
 
   return (
@@ -215,11 +217,19 @@ function PocketCard({
           />
           <Figure
             label="Expected months to completion"
-            value={p.monthsToCompletion === null ? '—' : String(p.monthsToCompletion)}
+            value={
+              p.status === 'projection-too-long'
+                ? 'Over 600'
+                : p.monthsToCompletion === null
+                  ? '—'
+                  : String(p.monthsToCompletion)
+            }
             note={
               p.completionLabel
                 ? `Expected completion: ${p.completionLabel}`
-                : 'No completion date is shown without an affordable contribution.'
+                : p.status === 'projection-too-long'
+                  ? 'No date or DPS schedule is generated beyond the 50-year safety limit.'
+                  : 'No completion date is shown without an affordable contribution.'
             }
           />
         </div>
@@ -338,31 +348,9 @@ function PocketForm({
   const [draft, setDraft] = useState(initial)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const validate = (value: PocketDraft) => {
-    const found: Record<string, string> = {}
-    if (!value.name.trim()) found.name = 'Give the pocket a name.'
-    const money = (raw: string, key: string, label: string, allowZero: boolean) => {
-      if (raw.trim() === '') {
-        if (!allowZero) found[key] = `Enter the ${label}.`
-        return
-      }
-      try {
-        const paisa = parseTakaToPaisa(raw)
-        if (paisa < 0) found[key] = `The ${label} cannot be negative.`
-        if (!allowZero && paisa <= 0) found[key] = `The ${label} must be greater than ৳0.`
-      } catch {
-        found[key] = `Enter the ${label} as a number, for example 15000.`
-      }
-    }
-    money(value.target, 'target', 'target amount', false)
-    money(value.saved, 'saved', 'amount already saved', true)
-    money(value.contribution, 'contribution', 'planned monthly contribution', true)
-    return found
-  }
-
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    const found = validate(draft)
+    const found = validatePocketDraft(draft)
     setErrors(found)
     if (Object.keys(found).length === 0) onSubmit(draft)
   }
@@ -387,8 +375,10 @@ function PocketForm({
             id="pocket-item"
             value={draft.item}
             placeholder="e.g. MacBook Air M4"
+            aria-invalid={Boolean(errors.item)}
             onChange={(e) => setDraft({ ...draft, item: e.target.value })}
           />
+          {errors.item ? <span className="error-text">{errors.item}</span> : null}
         </div>
         <div className="field">
           <label htmlFor="pocket-target">Target amount (৳)</label>
@@ -437,4 +427,30 @@ function PocketForm({
       </div>
     </form>
   )
+}
+
+/** Pure form validation, exported so the required pocket fields stay regression-tested. */
+export function validatePocketDraft(value: PocketDraft): Record<string, string> {
+  const found: Record<string, string> = {}
+  if (!value.name.trim()) found.name = 'Give the pocket a name.'
+  if (!value.item.trim()) found.item = 'Describe the item this pocket is for.'
+
+  const money = (raw: string, key: string, label: string, allowZero: boolean) => {
+    if (raw.trim() === '') {
+      if (!allowZero) found[key] = `Enter the ${label}.`
+      return
+    }
+    try {
+      const paisa = parseTakaToPaisa(raw)
+      if (paisa < 0) found[key] = `The ${label} cannot be negative.`
+      if (!allowZero && paisa <= 0) found[key] = `The ${label} must be greater than ৳0.`
+    } catch {
+      found[key] = `Enter the ${label} as a number, for example 15000.`
+    }
+  }
+
+  money(value.target, 'target', 'target amount', false)
+  money(value.saved, 'saved', 'amount already saved', true)
+  money(value.contribution, 'contribution', 'planned monthly contribution', false)
+  return found
 }

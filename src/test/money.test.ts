@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseTakaToPaisa, roundHalfUp, sumPaisa } from '../domain/money'
+import { isValidPaisa, parseTakaToPaisa, roundHalfUp, sumPaisa } from '../domain/money'
 import { formatTaka, formatPercent, formatSignedPercent } from '../domain/format'
 
 describe('money', () => {
@@ -20,6 +20,14 @@ describe('money', () => {
     expect(() => parseTakaToPaisa('abc')).toThrow()
     expect(() => parseTakaToPaisa('')).toThrow()
     expect(() => parseTakaToPaisa('12.3.4')).toThrow()
+  })
+
+  it('rejects values that cannot be represented as exact integer paisa', () => {
+    expect(() => parseTakaToPaisa('999999999999999999999999.00')).toThrow(/safe supported range/)
+    expect(() => parseTakaToPaisa(Number.MAX_SAFE_INTEGER)).toThrow(/safe supported range/)
+    expect(isValidPaisa(Number.MAX_SAFE_INTEGER)).toBe(true)
+    expect(isValidPaisa(Number.MAX_SAFE_INTEGER + 1)).toBe(false)
+    expect(() => sumPaisa([Number.MAX_SAFE_INTEGER, 1])).toThrow(/safe supported range/)
   })
 
   it('rounds sub-paisa input half up', () => {

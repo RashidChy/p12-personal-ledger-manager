@@ -58,6 +58,40 @@ describe('local data validation', () => {
     expect(issues.join(' ')).toMatch(/monthly salary was invalid/)
   })
 
+  it('rejects negative, fractional and unsafe stored money values', () => {
+    for (const invalidSalary of [-1, 10.5, Number.MAX_SAFE_INTEGER + 1]) {
+      const { state, issues } = validateLedgerState({ ...validBlob, salaryPaisa: invalidSalary })
+      expect(state!.salaryPaisa).toBeNull()
+      expect(issues.join(' ')).toMatch(/monthly salary was invalid/)
+    }
+
+    const { state, issues } = validateLedgerState({
+      ...validBlob,
+      expenses: [
+        { ...validBlob.expenses[0], id: 'NEG', amountPaisa: -1 },
+        { ...validBlob.expenses[0], id: 'ZERO', amountPaisa: 0 },
+      ],
+      salaryByMonth: { '2026-04': -100 },
+    })
+    expect(state!.expenses).toEqual([])
+    expect(state!.salaryByMonth).toEqual({})
+    expect(issues.join(' ')).toMatch(/invalid amount/)
+    expect(issues.join(' ')).toMatch(/salary override/)
+  })
+
+  it('drops savings pockets that cannot produce a meaningful projection', () => {
+    const invalidPockets = [
+      { ...validBlob.pockets[0], id: 'NO-ITEM', item: '' },
+      { ...validBlob.pockets[0], id: 'NO-NAME', name: '  ' },
+      { ...validBlob.pockets[0], id: 'ZERO-TARGET', targetPaisa: 0 },
+      { ...validBlob.pockets[0], id: 'NEG-SAVED', savedPaisa: -1 },
+      { ...validBlob.pockets[0], id: 'ZERO-CONTRIBUTION', monthlyContributionPaisa: 0 },
+    ]
+    const { state, issues } = validateLedgerState({ ...validBlob, pockets: invalidPockets })
+    expect(state!.pockets).toEqual([])
+    expect(issues.filter((issue) => issue.includes('Savings pocket'))).toHaveLength(invalidPockets.length)
+  })
+
   it('drops invalid month overrides but keeps valid ones', () => {
     const { state, issues } = validateLedgerState({
       ...validBlob,
@@ -71,6 +105,12 @@ describe('local data validation', () => {
     const { state, issues } = validateLedgerState({ ...validBlob, referenceDate: 'yesterday' })
     expect(state!.referenceDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(issues.join(' ')).toMatch(/forecast date was invalid/)
+  })
+
+  it('bounds an implausible stored DPS rate', () => {
+    const { state, issues } = validateLedgerState({ ...validBlob, dpsAnnualRatePercent: 101 })
+    expect(state!.dpsAnnualRatePercent).toBe(8)
+    expect(issues.join(' ')).toMatch(/DPS rate was invalid/)
   })
 
   it('rejects a non-object blob', () => {

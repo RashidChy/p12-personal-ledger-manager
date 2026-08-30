@@ -21,10 +21,14 @@ describe('daily run rate', () => {
 
   it('keeps a fractional run rate unrounded', () => {
     const f = forecastMonth(ledger({ expenses: april }), '2026-04', '2026-04-07')
-    expect(f.dailyRunRatePaisa).toBeCloseTo(2000000 / 7, 10)
-    expect(f.expectedAdditionalPaisa).toBeCloseTo((2000000 / 7) * 23, 10)
+    // The 9 April expense is future-dated relative to this forecast and must
+    // not leak into the 7 April run rate.
+    expect(f.spentToDatePaisa).toBe(taka('18500.00'))
+    expect(f.dailyRunRatePaisa).toBeCloseTo(1850000 / 7, 10)
+    expect(f.expectedAdditionalPaisa).toBeCloseTo((1850000 / 7) * 23, 10)
     // No intermediate rounding: month-end equals the exact algebraic result.
-    expect(f.expectedMonthEndSpendingPaisa).toBeCloseTo(2000000 + (2000000 / 7) * 23, 10)
+    expect(f.expectedMonthEndSpendingPaisa).toBeCloseTo(1850000 + (1850000 / 7) * 23, 10)
+    expect(f.assumptions.join(' ')).toContain('on or before 2026-04-07')
   })
 })
 
@@ -91,9 +95,14 @@ describe('insufficient data', () => {
   })
 
   it('refuses to forecast a month that has not started', () => {
-    const f = forecastMonth(ledger({ expenses: april }), '2026-06', '2026-04-17')
+    const f = forecastMonth(
+      ledger({ expenses: [...april, expense('2026-06-01', 'Rent', 'Landlord', '16000.00')] }),
+      '2026-06',
+      '2026-04-17',
+    )
     expect(f.status).toBe('future-month')
     expect(f.elapsedDays).toBe(0)
+    expect(f.spentToDatePaisa).toBe(0)
     expect(f.dailyRunRatePaisa).toBeNull()
     expect(f.insufficientDataReason).toContain('starts after the forecast date')
   })

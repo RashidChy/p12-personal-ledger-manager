@@ -8,6 +8,7 @@ import { projectPocket } from './domain/savings'
 import { useLedger } from './store/useLedger'
 import { ConfirmDialog, Notice } from './ui/common'
 import { Expenses } from './ui/Expenses'
+import { FixtureImporter } from './ui/FixtureImporter'
 import { ForecastView } from './ui/ForecastView'
 import { Methodology } from './ui/Methodology'
 import { Overview } from './ui/Overview'
@@ -28,7 +29,12 @@ export default function App() {
   const [tab, setTab] = useState<string>('overview')
   const [month, setMonth] = useState<MonthKey>(() => monthOf(state.referenceDate))
   const [resetting, setResetting] = useState(false)
-  const [resetCase, setResetCase] = useState<string>(state.fixtureCaseId ?? DEFAULT_CASE_ID)
+  const [importing, setImporting] = useState(false)
+  const [resetCase, setResetCase] = useState<string>(() =>
+    listCases().some((candidate) => candidate.case_id === state.fixtureCaseId)
+      ? (state.fixtureCaseId as string)
+      : DEFAULT_CASE_ID,
+  )
 
   const months = useMemo(() => {
     const recorded = monthsWithExpenses(state.expenses)
@@ -88,6 +94,9 @@ export default function App() {
             </div>
             <button type="button" onClick={() => setResetting(true)}>
               Reset to sample data
+            </button>
+            <button type="button" onClick={() => setImporting(true)}>
+              Import fixture JSON
             </button>
           </div>
         </div>
@@ -214,6 +223,18 @@ export default function App() {
             const target = listCases().find((c) => c.case_id === resetCase)
             if (target) setMonth(target.months.this)
             setResetting(false)
+            setTab('overview')
+          }}
+        />
+      ) : null}
+
+      {importing ? (
+        <FixtureImporter
+          onCancel={() => setImporting(false)}
+          onReplace={(nextState, selectedCase) => {
+            dispatch({ type: 'replace', state: nextState })
+            setMonth(selectedCase.months.this)
+            setImporting(false)
             setTab('overview')
           }}
         />

@@ -1,5 +1,5 @@
 /** Expenses: salary control, search, filters, add / edit / delete. */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatIsoDate, monthLabel, monthOf, type MonthKey } from '../domain/dates'
 import { formatTaka } from '../domain/format'
 import { parseTakaToPaisa } from '../domain/money'
@@ -229,6 +229,20 @@ function SalaryCard({
   )
   const [monthValue, setMonthValue] = useState(() => (override === undefined ? '' : (override / 100).toFixed(2)))
   const [error, setError] = useState<string | null>(null)
+
+  // These fields are editable local drafts, but the ledger can be replaced by
+  // a fixture and the selected month can change outside this component. Keep
+  // the drafts aligned with those authoritative props instead of carrying a
+  // stale salary or override into the next month.
+  useEffect(() => {
+    setValue(state.salaryPaisa === null ? '' : (state.salaryPaisa / 100).toFixed(2))
+    setError(null)
+  }, [state.salaryPaisa])
+
+  useEffect(() => {
+    setMonthValue(override === undefined ? '' : (override / 100).toFixed(2))
+    setError(null)
+  }, [month, override])
 
   const apply = (raw: string, target: 'default' | 'month') => {
     if (raw.trim() === '') {

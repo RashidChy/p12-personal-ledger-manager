@@ -12,7 +12,7 @@ describe('official P12 fixture', () => {
     expect(result.problems).toEqual([])
     expect(result.ok).toBe(true)
     expect(result.caseCount).toBe(25)
-    expect(fixture.schema_version).toBe('2.1')
+    expect(fixture.schema_version).toBe('2.2')
     expect(fixture.problem_id).toBe('P12')
   })
 

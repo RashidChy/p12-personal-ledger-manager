@@ -22,9 +22,7 @@ function asString(value: unknown, fallback = ''): string {
 }
 
 function asPaisa(value: unknown): number | null {
-  if (isValidPaisa(value)) return value
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value)
-  return null
+  return isValidPaisa(value) ? value : null
 }
 
 function validateExpense(raw: unknown, index: number, issues: string[]): Expense | null {
@@ -44,7 +42,7 @@ function validateExpense(raw: unknown, index: number, issues: string[]): Expense
     issues.push(`Expense ${id} had an invalid date (${JSON.stringify(r.date)}) and was dropped.`)
     return null
   }
-  if (amountPaisa === null) {
+  if (amountPaisa === null || amountPaisa <= 0) {
     issues.push(`Expense ${id} had an invalid amount (${JSON.stringify(r.amountPaisa)}) and was dropped.`)
     return null
   }
@@ -72,21 +70,32 @@ function validatePocket(raw: unknown, index: number, issues: string[]): Pocket |
   }
   const r = raw as Record<string, unknown>
   const id = asString(r.id)
+  const name = asString(r.name).trim()
+  const item = asString(r.item).trim()
   const targetPaisa = asPaisa(r.targetPaisa)
-  const savedPaisa = asPaisa(r.savedPaisa) ?? 0
-  const monthlyContributionPaisa = asPaisa(r.monthlyContributionPaisa) ?? 0
+  const savedPaisa = asPaisa(r.savedPaisa)
+  const monthlyContributionPaisa = asPaisa(r.monthlyContributionPaisa)
   if (!id) {
     issues.push(`Savings pocket #${index + 1} had no id and was dropped.`)
     return null
   }
-  if (targetPaisa === null) {
-    issues.push(`Savings pocket ${id} had an invalid target amount and was dropped.`)
+  if (
+    !name ||
+    !item ||
+    targetPaisa === null ||
+    targetPaisa <= 0 ||
+    savedPaisa === null ||
+    savedPaisa < 0 ||
+    monthlyContributionPaisa === null ||
+    monthlyContributionPaisa <= 0
+  ) {
+    issues.push(`Savings pocket ${id} had missing details or invalid amounts and was dropped.`)
     return null
   }
   return {
     id,
-    name: asString(r.name, 'Untitled pocket'),
-    item: asString(r.item),
+    name,
+    item,
     targetPaisa,
     savedPaisa,
     monthlyContributionPaisa,
@@ -141,7 +150,8 @@ export function validateLedgerState(input: unknown): ValidationResult {
     .map((p, i) => validatePocket(p, i, issues))
     .filter((p): p is Pocket => p !== null)
 
-  const salaryPaisa = raw.salaryPaisa === null ? null : asPaisa(raw.salaryPaisa)
+  const parsedSalaryPaisa = raw.salaryPaisa === null ? null : asPaisa(raw.salaryPaisa)
+  const salaryPaisa = parsedSalaryPaisa !== null && parsedSalaryPaisa >= 0 ? parsedSalaryPaisa : null
   if (raw.salaryPaisa !== null && raw.salaryPaisa !== undefined && salaryPaisa === null) {
     issues.push('The stored monthly salary was invalid and has been cleared. Set it again to restore salary-based figures.')
   }
@@ -150,7 +160,7 @@ export function validateLedgerState(input: unknown): ValidationResult {
   if (typeof raw.salaryByMonth === 'object' && raw.salaryByMonth !== null) {
     for (const [month, value] of Object.entries(raw.salaryByMonth as Record<string, unknown>)) {
       const paisa = asPaisa(value)
-      if (isMonthKey(month) && paisa !== null) salaryByMonth[month] = paisa
+      if (isMonthKey(month) && paisa !== null && paisa >= 0) salaryByMonth[month] = paisa
       else issues.push(`A salary override for "${month}" was invalid and was dropped.`)
     }
   }
@@ -161,7 +171,10 @@ export function validateLedgerState(input: unknown): ValidationResult {
   }
 
   const dpsAnnualRatePercent =
-    typeof raw.dpsAnnualRatePercent === 'number' && Number.isFinite(raw.dpsAnnualRatePercent) && raw.dpsAnnualRatePercent >= 0
+    typeof raw.dpsAnnualRatePercent === 'number' &&
+    Number.isFinite(raw.dpsAnnualRatePercent) &&
+    raw.dpsAnnualRatePercent >= 0 &&
+    raw.dpsAnnualRatePercent <= 30
       ? raw.dpsAnnualRatePercent
       : 8
   if (raw.dpsAnnualRatePercent !== undefined && dpsAnnualRatePercent !== raw.dpsAnnualRatePercent) {
