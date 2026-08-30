@@ -1,11 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Personal Ledger Manager">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#35d0ba"/>
-      <stop offset="1" stop-color="#2b8fd6"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="14" fill="url(#g)"/>
-  <text x="32" y="45" font-family="DejaVu Sans, Segoe UI, sans-serif" font-size="38" font-weight="700"
-        text-anchor="middle" fill="#06231f">৳</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="My Ledger">
+  <rect width="64" height="64" rx="16" fill="#176b4d"/>
+  <path d="M15 22h34M19 14h26a5 5 0 0 1 5 5v28a5 5 0 0 1-5 5H19a5 5 0 0 1-5-5V19a5 5 0 0 1 5-5Z"
+        fill="none" stroke="#fffefa" stroke-width="4" stroke-linecap="round"/>
+  <path d="M25 32h15M25 42h9" fill="none" stroke="#fffefa" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="51" cy="51" r="8" fill="#d8f56f" stroke="#fffefa" stroke-width="3"/>
 </svg>

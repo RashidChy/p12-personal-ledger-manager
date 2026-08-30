@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.1",
+  "schema_version": "2.2",
   "problem_id": "P12",
   "format_note": "## Case format\n```json\n{ \"case_id\": \"PUB-01\", \"today\": \"2026-04-14\", \"months\": {\"last\": \"2026-03\", \"this\": \"2026-04\"},\n  \"salary_bdt\": \"30000.00\",\n  \"expenses\": [ {\"id\": \"E001\", \"date\": \"2026-03-01\", \"category\": \"Rent\", \"shop\": \"Landlord\", \"amount_bdt\": \"10000.00\"}, ... ],\n  \"pockets\": [ {\"id\": \"SP-1\", \"name\": \"Bike\", \"item\": \"Honda Livo\", \"target_bdt\": \"76000.00\", \"monthly_contribution_bdt\": \"15000.00\"} ],\n  \"dps_annual_rate_percent\": \"9.00\",\n  \"dps_rule\": \"Annual rate as stated. Each month: balance = balance + deposit, then interest = balance x rate / 12 / 100 rounded half up to the paisa and added to the balance ...\" }\n```\n`today` is inside `months.this`; no expense is dated after it. Public cases carry 2 months of 41 to 61\n1 pocket.",
   "cases": [
