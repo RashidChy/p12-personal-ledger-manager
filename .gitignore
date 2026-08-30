@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.env
+.env.*
+.vite/
+coverage/
+
+# Tesseract worker + WASM core copied out of node_modules by scripts/setup-ocr-assets.mjs
+# (regenerated deterministically by `npm run setup:ocr`, which runs on predev/prebuild)
+public/ocr/worker.min.js
+public/ocr/core/
