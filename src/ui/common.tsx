@@ -65,7 +65,7 @@ export function StatCard({
   badge?: ReactNode
 }) {
   return (
-    <div className="card">
+    <div className={`card stat-card ${tone}`}>
       <div className={`kpi ${tone}`}>
         <span className="kpi-label">{label}</span>
         <span className="kpi-value">{value}</span>
@@ -82,10 +82,11 @@ export function Meter({ percent, over = false, label }: { percent: number; over?
     <div
       className={`meter ${over ? 'over' : ''}`}
       role="meter"
-      aria-valuenow={Math.round(percent)}
+      aria-valuenow={Math.round(clamped)}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label}
+      aria-valuetext={label}
     >
       <span style={{ width: `${clamped}%` }} />
     </div>
@@ -117,9 +118,16 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     const node = ref.current
     const focusable = node?.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
@@ -129,7 +137,7 @@ export function Modal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || !node) return
@@ -150,9 +158,10 @@ export function Modal({
     document.addEventListener('keydown', onKeyDown, true)
     return () => {
       document.removeEventListener('keydown', onKeyDown, true)
+      document.body.style.overflow = previousOverflow
       previouslyFocused.current?.focus?.()
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div
@@ -162,7 +171,12 @@ export function Modal({
       }}
     >
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby={labelledBy} ref={ref}>
-        <h2 id={labelledBy}>{title}</h2>
+        <div className="modal-header">
+          <h2 id={labelledBy}>{title}</h2>
+          <button type="button" className="modal-close" aria-label={`Close ${title}`} onClick={onClose}>
+            ×
+          </button>
+        </div>
         {description ? <p className="modal-sub">{description}</p> : null}
         {children}
       </div>

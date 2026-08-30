@@ -39,11 +39,12 @@ export function ForecastView({
               id="forecast-date"
               type="date"
               value={referenceDate}
+              aria-describedby="forecast-date-help"
               onChange={(e) => {
                 if (e.target.value) onChangeReferenceDate(e.target.value as IsoDate)
               }}
             />
-            <span className="hint">
+            <span className="hint" id="forecast-date-help">
               Seeded from the official fixture's <code>today</code> ({formatIsoDate(referenceDate)}) so the demo is
               reproducible. Change it to see the projection move.
             </span>
@@ -57,7 +58,7 @@ export function ForecastView({
         ) : null}
       </section>
 
-      <div className="grid grid-kpi">
+      <div className="grid grid-kpi forecast-grid">
         <StatCard
           label="Spending recorded so far"
           value={formatTaka(forecast.spentToDatePaisa)}

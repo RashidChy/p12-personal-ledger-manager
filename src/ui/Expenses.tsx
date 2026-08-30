@@ -13,10 +13,12 @@ export function Expenses({
   state,
   dispatch,
   month,
+  openAddRequest = 0,
 }: {
   state: LedgerState
   dispatch: (action: LedgerAction) => void
   month: MonthKey
+  openAddRequest?: number
 }) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<'all' | Category>('all')
@@ -25,6 +27,10 @@ export function Expenses({
   const [editing, setEditing] = useState<Expense | null>(null)
   const [deleting, setDeleting] = useState<Expense | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (openAddRequest > 0) setAdding(true)
+  }, [openAddRequest])
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -284,7 +290,7 @@ function SalaryCard({
             value={value}
             placeholder="50000"
             aria-invalid={Boolean(error)}
-            aria-describedby="salary-help"
+            aria-describedby={error ? 'salary-help salary-error' : 'salary-help'}
             onChange={(e) => setValue(e.target.value)}
             onBlur={() => apply(value, 'default')}
           />
@@ -300,14 +306,16 @@ function SalaryCard({
             inputMode="decimal"
             value={monthValue}
             placeholder="Leave blank to use the standing salary"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'salary-month-help salary-error' : 'salary-month-help'}
             onChange={(e) => setMonthValue(e.target.value)}
             onBlur={() => apply(monthValue, 'month')}
           />
-          <span className="hint">Use this for a bonus month or a month with no income.</span>
+          <span className="hint" id="salary-month-help">Use this for a bonus month or a month with no income.</span>
         </div>
       </div>
       {error ? (
-        <p className="error-text" role="alert">
+        <p className="error-text" id="salary-error" role="alert">
           {error}
         </p>
       ) : null}

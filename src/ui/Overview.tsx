@@ -1,6 +1,6 @@
 /** Opening screen: everything a judge should see within a few seconds. */
 import { formatIsoDate, monthLabel, type MonthKey } from '../domain/dates'
-import { formatPercent, formatSignedPercent, formatTaka, formatTakaFromFloatPaisa } from '../domain/format'
+import { formatPercent, formatTaka, formatTakaFromFloatPaisa } from '../domain/format'
 import type { MonthlySummary } from '../domain/ledger'
 import type { ForecastResult } from '../domain/forecast'
 import type { Insight } from '../domain/insights'
@@ -28,7 +28,48 @@ export function Overview({
 
   return (
     <div className="stack">
-      <div className="grid grid-kpi">
+      <section className={`budget-hero ${summary.isOverspending ? 'over' : ''}`} aria-labelledby="budget-title">
+        <div className="budget-hero-copy">
+          <span className="eyebrow">{monthLabel(month)} balance</span>
+          <h2 id="budget-title">
+            {summary.remainingPaisa === null
+              ? 'Set a salary to complete your overview'
+              : summary.isOverspending
+                ? 'You are over your monthly salary'
+                : 'Available after spending'}
+          </h2>
+          <span className="budget-value">
+            {summary.remainingPaisa === null
+              ? '—'
+              : formatTaka(summary.isOverspending ? summary.overspendPaisa : summary.remainingPaisa)}
+          </span>
+          <p>
+            {formatTaka(summary.totalSpentPaisa)} spent across {summary.expenseCount}{' '}
+            {summary.expenseCount === 1 ? 'expense' : 'expenses'}
+            {summary.hasSalary ? ` from a ${formatTaka(summary.salaryPaisa)} salary.` : '.'}
+          </p>
+        </div>
+        <div className="budget-progress">
+          <div className="spread">
+            <span className="kpi-label">Salary used</span>
+            <strong className="num">{formatPercent(spentPercent, 1)}</strong>
+          </div>
+          {spentPercent === null ? (
+            <Badge tone="warning">Add your salary to see progress</Badge>
+          ) : (
+            <Meter
+              percent={spentPercent}
+              over={spentPercent > 100}
+              label={`${formatPercent(spentPercent, 1)} of salary spent`}
+            />
+          )}
+          <Badge tone={summary.isOverspending ? 'critical' : summary.hasSalary ? 'positive' : 'warning'}>
+            {summary.isOverspending ? 'Over salary' : summary.hasSalary ? 'On track' : 'Salary needed'}
+          </Badge>
+        </div>
+      </section>
+
+      <div className="grid grid-kpi overview-support">
         <StatCard
           label="Monthly salary"
           value={formatTaka(summary.salaryPaisa)}
@@ -36,44 +77,35 @@ export function Overview({
           note={summary.hasSalary ? monthLabel(month) : 'No salary set for this month'}
         />
         <StatCard
-          label="Total spent"
-          value={formatTaka(summary.totalSpentPaisa)}
-          note={`${summary.expenseCount} ${summary.expenseCount === 1 ? 'expense' : 'expenses'} recorded in ${monthLabel(month)}`}
+          label={`Change from ${monthLabel(cmp.previousMonth)}`}
+          value={formatTaka(cmp.changePaisa, { signed: true })}
+          tone={cmp.changePaisa > 0 ? 'warning' : 'positive'}
+          note={`${monthLabel(cmp.previousMonth)} total was ${formatTaka(cmp.previousTotalPaisa)}`}
         />
         <StatCard
-          label={summary.isOverspending ? 'Overspent by' : 'Remaining salary'}
-          value={
-            summary.remainingPaisa === null
-              ? '—'
-              : formatTaka(summary.isOverspending ? summary.overspendPaisa : summary.remainingPaisa)
-          }
-          tone={summary.isOverspending ? 'critical' : 'positive'}
-          badge={
-            summary.remainingPaisa === null ? (
-              <Badge tone="warning">Set a salary to see this</Badge>
-            ) : summary.isOverspending ? (
-              <Badge tone="critical">Over salary</Badge>
-            ) : (
-              <Badge tone="positive">Within salary</Badge>
-            )
-          }
-          note={
-            summary.remainingPaisa === null
-              ? 'Remaining salary needs a monthly salary figure.'
-              : `Salary ${formatTaka(summary.salaryPaisa)} − spent ${formatTaka(summary.totalSpentPaisa)}`
-          }
+          label={forecast.status === 'completed' ? 'Actual month-end spending' : 'Expected month-end spending'}
+          value={formatTakaFromFloatPaisa(forecast.expectedMonthEndSpendingPaisa)}
+          note={forecast.status === 'completed' ? 'This month is complete.' : `Based on ${formatTakaFromFloatPaisa(forecast.dailyRunRatePaisa)} per day`}
         />
         <StatCard
-          label="Percentage of salary spent"
-          value={formatPercent(spentPercent, 1)}
-          tone={spentPercent !== null && spentPercent > 100 ? 'critical' : spentPercent !== null && spentPercent > 80 ? 'warning' : 'neutral'}
-          note={
-            spentPercent === null ? (
-              'Not available without a salary.'
-            ) : (
-              <Meter percent={spentPercent} over={spentPercent > 100} label={`${formatPercent(spentPercent, 1)} of salary spent`} />
-            )
+          label={
+            forecast.forecastMonthEndBalancePaisa === null
+              ? 'Forecast balance'
+              : forecast.projectedOverspend
+                ? 'Expected shortfall'
+                : 'Expected money left'
           }
+          value={formatTakaFromFloatPaisa(
+            forecast.projectedOverspend ? forecast.forecastShortfallPaisa : forecast.forecastMonthEndBalancePaisa,
+          )}
+          tone={
+            forecast.forecastMonthEndBalancePaisa === null
+              ? 'warning'
+              : forecast.projectedOverspend
+                ? 'critical'
+                : 'positive'
+          }
+          note={forecast.insufficientDataReason ?? `Forecast as of ${formatIsoDate(forecast.referenceDate)}`}
         />
       </div>
 
@@ -139,82 +171,6 @@ export function Overview({
         </section>
       </div>
 
-      <div className="grid grid-2">
-        <section className="card" aria-labelledby="compare-title">
-          <div className="card-title">
-            <h2 id="compare-title">Compared with {monthLabel(cmp.previousMonth)}</h2>
-          </div>
-          <div className="stack-sm">
-            <div className="spread">
-              <div className="kpi">
-                <span className="kpi-label">Change in spending</span>
-                <span className={`kpi-value sm ${cmp.changePaisa > 0 ? 'critical' : 'positive'}`}>
-                  {formatTaka(cmp.changePaisa, { signed: true })}
-                </span>
-              </div>
-              <div className="kpi">
-                <span className="kpi-label">Change %</span>
-                <span className="kpi-value sm">{formatSignedPercent(cmp.changePercent, 1)}</span>
-              </div>
-              <div className="kpi">
-                <span className="kpi-label">{monthLabel(cmp.previousMonth)} total</span>
-                <span className="kpi-value sm">{formatTaka(cmp.previousTotalPaisa)}</span>
-              </div>
-            </div>
-            <div>
-              {cmp.changePercentNote ? (
-                <Badge tone="warning">{cmp.changePercentNote}</Badge>
-              ) : (
-                <Badge tone={cmp.changePaisa > 0 ? 'warning' : 'positive'}>
-                  {cmp.changePaisa > 0 ? 'Spending is up on last month' : 'Spending is down on last month'}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="card" aria-labelledby="forecast-summary-title">
-          <div className="card-title">
-            <h2 id="forecast-summary-title">Forecast</h2>
-            <span className="tiny muted">as of {formatIsoDate(forecast.referenceDate)}</span>
-          </div>
-          {forecast.insufficientDataReason && forecast.expectedMonthEndSpendingPaisa === null ? (
-            <NoticeLike reason={forecast.insufficientDataReason} />
-          ) : (
-            <div className="stack-sm">
-              <div className="spread">
-                <div className="kpi">
-                  <span className="kpi-label">
-                    {forecast.status === 'completed' ? 'Actual month-end spending' : 'Expected month-end spending'}
-                  </span>
-                  <span className="kpi-value sm">{formatTakaFromFloatPaisa(forecast.expectedMonthEndSpendingPaisa)}</span>
-                </div>
-                <div className="kpi">
-                  <span className="kpi-label">
-                    {forecast.projectedOverspend ? 'Expected shortfall' : 'Expected money left'}
-                  </span>
-                  <span className={`kpi-value sm ${forecast.projectedOverspend ? 'critical' : 'positive'}`}>
-                    {formatTakaFromFloatPaisa(
-                      forecast.projectedOverspend ? forecast.forecastShortfallPaisa : forecast.forecastMonthEndBalancePaisa,
-                    )}
-                  </span>
-                </div>
-              </div>
-              <p className="small muted">
-                {forecast.status === 'completed'
-                  ? `${monthLabel(month)} is complete, so actual spending is used as the final total.`
-                  : `${formatTakaFromFloatPaisa(forecast.dailyRunRatePaisa)}/day over ${forecast.elapsedDays} elapsed ${forecast.elapsedDays === 1 ? 'day' : 'days'}, projected across ${forecast.remainingDays} remaining ${forecast.remainingDays === 1 ? 'day' : 'days'}.`}
-              </p>
-              <div>
-                <button type="button" className="ghost small" onClick={() => onGoTo('forecast')}>
-                  Forecast details and assumptions →
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-      </div>
-
       <section className="card" aria-labelledby="insights-title">
         <div className="card-title">
           <h2 id="insights-title">Insights for {monthLabel(month)}</h2>
@@ -274,15 +230,6 @@ export function Overview({
           </div>
         )}
       </section>
-    </div>
-  )
-}
-
-function NoticeLike({ reason }: { reason: string }) {
-  return (
-    <div className="notice warning" role="status">
-      <span className="notice-icon" aria-hidden="true">!</span>
-      <div>{reason}</div>
     </div>
   )
 }

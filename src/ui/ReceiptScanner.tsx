@@ -20,7 +20,7 @@ import {
   type OcrProgress,
 } from '../ocr/ocrEngine'
 import { newId } from '../store/useLedger'
-import { Badge, Notice } from './common'
+import { Badge, Method, Notice } from './common'
 import { ExpenseFields, validateDraft, type DraftErrors, type ExpenseDraft } from './ExpenseForm'
 
 type Phase = 'idle' | 'scanning' | 'review' | 'failed'
@@ -212,12 +212,21 @@ export function ReceiptScanner({
 
   return (
     <div className="stack">
-      <Notice tone="positive" title="Private by design.">
-        The photo stays on this device. Text recognition runs in your browser with Tesseract.js (WebAssembly); the
-        engine and English model are served from this app itself. No image, and no extracted text, is uploaded
-        anywhere. The browser may need the network to fetch those same-origin OCR assets when a scan starts, but the
-        receipt itself is processed locally and is never sent with that request.
+      <Notice tone="positive" title="Processed privately on this device.">
+        Your receipt image and its recognised text are never uploaded. Only the expense you approve is saved.
       </Notice>
+
+      <ol className="scan-steps" aria-label="Receipt scan steps">
+        <li className={saved ? 'complete' : phase === 'idle' ? 'current' : 'complete'}>
+          <span>1</span> Choose photo
+        </li>
+        <li className={saved ? 'complete' : phase === 'scanning' || phase === 'failed' ? 'current' : phase === 'review' ? 'complete' : ''}>
+          <span>2</span> Read receipt
+        </li>
+        <li className={saved ? 'complete' : phase === 'review' ? 'current' : ''}>
+          <span>3</span> Review &amp; save
+        </li>
+      </ol>
 
       {saved ? (
         <Notice tone="positive" onDismiss={() => setSaved(null)}>
@@ -324,7 +333,14 @@ export function ReceiptScanner({
             {phase === 'scanning' ? (
               <div className="stack-sm" aria-live="polite">
                 <p className="small">{progress?.label ?? 'Working…'}</p>
-                <div className="progress-track">
+                <div
+                  className="progress-track"
+                  role="progressbar"
+                  aria-label={progress?.label ?? 'Reading receipt'}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round((progress?.progress ?? 0) * 100)}
+                >
                   <span style={{ width: `${Math.round((progress?.progress ?? 0) * 100)}%` }} />
                 </div>
                 <p className="tiny muted">
@@ -365,7 +381,6 @@ export function ReceiptScanner({
 
             {phase === 'review' && draft ? (
               <div className="stack-sm">
-                {parsed ? <ExtractionSummary parsed={parsed} durationMs={durationMs} /> : null}
                 {!parsed ? (
                   <Notice tone="info" title="Manual entry.">
                     Nothing was scanned, so fill in the details yourself.
@@ -381,6 +396,12 @@ export function ReceiptScanner({
                     if (Object.keys(errors).length > 0) setErrors(validateDraft(next))
                   }}
                 />
+
+                {parsed ? (
+                  <Method summary="View scan confidence and extraction details">
+                    <ExtractionSummary parsed={parsed} durationMs={durationMs} />
+                  </Method>
+                ) : null}
 
                 {parsed && parsed.amountCandidates.length > 1 ? (
                   <div className="field">

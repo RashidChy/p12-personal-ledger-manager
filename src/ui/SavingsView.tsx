@@ -64,12 +64,13 @@ export function SavingsView({
               max={30}
               step={0.25}
               value={dpsAnnualRatePercent}
+              aria-describedby="dps-rate-help"
               onChange={(e) => {
                 const value = Number(e.target.value)
                 if (Number.isFinite(value) && value >= 0 && value <= 30) onChangeRate(value)
               }}
             />
-            <span className="hint">
+            <span className="hint" id="dps-rate-help">
               0%–30%. Seeded from the official fixture. Illustrative only - not a quoted product or financial advice.
             </span>
           </div>
@@ -200,37 +201,40 @@ function PocketCard({
           label={`${p.pocket.name}: ${formatPercent(p.progressPercent, 1)} of target saved`}
         />
 
-        <div className="grid grid-kpi" style={{ marginTop: 6 }}>
-          <Figure label="Current progress" value={formatPercent(p.progressPercent, 1)} note={`${formatTaka(p.savedPaisa)} saved`} />
-          <Figure label="Remaining target" value={formatTaka(p.remainingTargetPaisa)} />
+        <div className="grid grid-kpi pocket-summary" style={{ marginTop: 6 }}>
           <Figure label="Planned monthly contribution" value={formatTaka(p.plannedContributionPaisa)} />
           <Figure
-            label="Forecast disposable amount"
-            value={formatTakaFromFloatPaisa(p.forecastDisposablePaisa)}
-            note={`max(0, forecast month-end balance) for ${monthLabel(month)}`}
-          />
-          <Figure
-            label="Effective affordable contribution"
+            label="Affordable each month"
             value={formatTakaFromFloatPaisa(p.effectiveContributionPaisa)}
-            note="min(planned, forecast disposable)"
+            note={`${monthLabel(month)} forecast leaves ${formatTakaFromFloatPaisa(p.forecastDisposablePaisa)} available`}
             tone={p.forecastSupportsPlanned === false ? 'warning' : undefined}
           />
           <Figure
-            label="Expected months to completion"
+            label="Expected completion"
             value={
               p.status === 'projection-too-long'
-                ? 'Over 600'
-                : p.monthsToCompletion === null
+                ? 'Over 50 years'
+                : p.completionLabel === null
                   ? '—'
-                  : String(p.monthsToCompletion)
+                  : p.completionLabel
             }
             note={
-              p.completionLabel
-                ? `Expected completion: ${p.completionLabel}`
+              p.monthsToCompletion !== null
+                ? `${p.monthsToCompletion} ${p.monthsToCompletion === 1 ? 'month' : 'months'} at the affordable contribution`
                 : p.status === 'projection-too-long'
                   ? 'No date or DPS schedule is generated beyond the 50-year safety limit.'
                   : 'No completion date is shown without an affordable contribution.'
             }
+          />
+          <Figure
+            label={p.dps ? `DPS return at ${p.dps.annualRatePercent.toFixed(2)}%` : 'DPS return'}
+            value={p.dps ? formatTaka(p.dps.estimatedInterestPaisa) : '—'}
+            note={
+              p.dps
+                ? `${formatTaka(p.dps.maturityValuePaisa)} maturity value over ${p.dps.months} ${p.dps.months === 1 ? 'month' : 'months'}`
+                : 'Available once the forecast supports a completion plan.'
+            }
+            tone={p.dps ? 'accent' : undefined}
           />
         </div>
 
@@ -239,52 +243,49 @@ function PocketCard({
         </Notice>
 
         {p.dps ? (
-          <div className="stack-sm">
-            <div className="spread">
-              <h3>DPS projection over {p.dps.months} {p.dps.months === 1 ? 'month' : 'months'}</h3>
+          <Method summary={`View full DPS projection and ${p.dps.months}-month schedule`}>
+            <div className="spread" style={{ marginBottom: 10 }}>
+              <h3>DPS projection details</h3>
               <Badge tone="info">Illustrative estimate · not financial advice</Badge>
             </div>
             <div className="grid grid-kpi">
               <Figure label="Annual DPS rate used" value={`${p.dps.annualRatePercent.toFixed(2)}%`} note={`${p.dps.monthlyRatePercent.toFixed(4)}% per month, compounded monthly`} />
               <Figure label="Monthly deposit used" value={formatTaka(p.dps.monthlyDepositPaisa)} note="the effective affordable contribution" />
               <Figure label="Total DPS principal" value={formatTaka(p.dps.totalPrincipalPaisa)} note={`${formatTaka(p.dps.openingBalancePaisa)} opening + ${formatTaka(p.dps.totalDepositsPaisa)} deposits`} />
-              <Figure label="Estimated interest earned" value={formatTaka(p.dps.estimatedInterestPaisa)} tone="accent" />
               <Figure label="DPS maturity value" value={formatTaka(p.dps.maturityValuePaisa)} tone="accent" note={`at the end of month ${p.dps.months}`} />
             </div>
-            <Method summary="Method, contribution timing and month-by-month schedule">
-              <div className="formula">
-                {p.dps.formula.map((line) => (
-                  <span key={line}>{line}</span>
-                ))}
-                <span>Contribution timing: {p.dps.contributionTiming}.</span>
-              </div>
-              <div className="table-scroll" style={{ marginTop: 10 }}>
-                <table>
-                  <caption className="visually-hidden">Month-by-month DPS schedule</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Month</th>
-                      <th scope="col" className="num">Opening</th>
-                      <th scope="col" className="num">Deposit</th>
-                      <th scope="col" className="num">Interest</th>
-                      <th scope="col" className="num">Closing</th>
+            <div className="formula" style={{ marginTop: 12 }}>
+              {p.dps.formula.map((line) => (
+                <span key={line}>{line}</span>
+              ))}
+              <span>Contribution timing: {p.dps.contributionTiming}.</span>
+            </div>
+            <div className="table-scroll" style={{ marginTop: 12 }} tabIndex={0} aria-label={`${p.pocket.name} month-by-month DPS schedule`}>
+              <table>
+                <caption className="visually-hidden">Month-by-month DPS schedule</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Month</th>
+                    <th scope="col" className="num">Opening</th>
+                    <th scope="col" className="num">Deposit</th>
+                    <th scope="col" className="num">Interest</th>
+                    <th scope="col" className="num">Closing</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {p.dps.schedule.map((row) => (
+                    <tr key={row.month}>
+                      <th scope="row">{row.month}</th>
+                      <td className="num">{formatTaka(row.openingPaisa)}</td>
+                      <td className="num">{formatTaka(row.depositPaisa)}</td>
+                      <td className="num">{formatTaka(row.interestPaisa)}</td>
+                      <td className="num">{formatTaka(row.closingPaisa)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {p.dps.schedule.map((row) => (
-                      <tr key={row.month}>
-                        <th scope="row">{row.month}</th>
-                        <td className="num">{formatTaka(row.openingPaisa)}</td>
-                        <td className="num">{formatTaka(row.depositPaisa)}</td>
-                        <td className="num">{formatTaka(row.interestPaisa)}</td>
-                        <td className="num">{formatTaka(row.closingPaisa)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Method>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Method>
         ) : null}
       </div>
     </section>
@@ -365,9 +366,10 @@ function PocketForm({
             value={draft.name}
             placeholder="e.g. Laptop"
             aria-invalid={Boolean(errors.name)}
+            aria-describedby={errors.name ? 'pocket-name-error' : undefined}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           />
-          {errors.name ? <span className="error-text">{errors.name}</span> : null}
+          {errors.name ? <span className="error-text" id="pocket-name-error">{errors.name}</span> : null}
         </div>
         <div className="field">
           <label htmlFor="pocket-item">Item details</label>
@@ -376,9 +378,10 @@ function PocketForm({
             value={draft.item}
             placeholder="e.g. MacBook Air M4"
             aria-invalid={Boolean(errors.item)}
+            aria-describedby={errors.item ? 'pocket-item-error' : undefined}
             onChange={(e) => setDraft({ ...draft, item: e.target.value })}
           />
-          {errors.item ? <span className="error-text">{errors.item}</span> : null}
+          {errors.item ? <span className="error-text" id="pocket-item-error">{errors.item}</span> : null}
         </div>
         <div className="field">
           <label htmlFor="pocket-target">Target amount (৳)</label>
@@ -388,9 +391,10 @@ function PocketForm({
             value={draft.target}
             placeholder="145000"
             aria-invalid={Boolean(errors.target)}
+            aria-describedby={errors.target ? 'pocket-target-error' : undefined}
             onChange={(e) => setDraft({ ...draft, target: e.target.value })}
           />
-          {errors.target ? <span className="error-text">{errors.target}</span> : null}
+          {errors.target ? <span className="error-text" id="pocket-target-error">{errors.target}</span> : null}
         </div>
         <div className="field">
           <label htmlFor="pocket-saved">Current amount saved (৳)</label>
@@ -400,9 +404,10 @@ function PocketForm({
             value={draft.saved}
             placeholder="0"
             aria-invalid={Boolean(errors.saved)}
+            aria-describedby={errors.saved ? 'pocket-saved-error' : undefined}
             onChange={(e) => setDraft({ ...draft, saved: e.target.value })}
           />
-          {errors.saved ? <span className="error-text">{errors.saved}</span> : null}
+          {errors.saved ? <span className="error-text" id="pocket-saved-error">{errors.saved}</span> : null}
         </div>
         <div className="field">
           <label htmlFor="pocket-contribution">Planned monthly contribution (৳)</label>
@@ -412,9 +417,10 @@ function PocketForm({
             value={draft.contribution}
             placeholder="12000"
             aria-invalid={Boolean(errors.contribution)}
+            aria-describedby={errors.contribution ? 'pocket-contribution-error' : undefined}
             onChange={(e) => setDraft({ ...draft, contribution: e.target.value })}
           />
-          {errors.contribution ? <span className="error-text">{errors.contribution}</span> : null}
+          {errors.contribution ? <span className="error-text" id="pocket-contribution-error">{errors.contribution}</span> : null}
         </div>
       </div>
       <div className="form-actions">
